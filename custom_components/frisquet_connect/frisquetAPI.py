@@ -1,36 +1,30 @@
 import logging
 import aiohttp
-from .const import AUTH_API, API_URL  # ,CONF_SITE_ID
+from .const import AUTH_API, API_URL
 
-from homeassistant.config_entries import ConfigEntry
-from datetime import datetime
 _LOGGER = logging.getLogger(__name__)
 
 
 class FrisquetGetInfo:
-
-    def __init__(self,  entry: ConfigEntry):
-        _LOGGER.debug("__init__ Frisquet API: %s", self)
-        self.data: dict = {}
-        self.previousdata: dict = {}
-
-    async def async_request_refresh(self):
-        _LOGGER.debug("async_request_refresh Frisquet API: %s", self.data)
-
-    async def async_add_listener(self, pos2, pos3):
-        _LOGGER.debug(
-            "async_add_listener Frisquet API: %s  pos2: %s  pos3:  %s", self.data, pos2, pos3)
-
-    async def last_update_success(self, pos2, pos3):
-        _LOGGER.debug(
-            "last_update_success Frisquet API: %s  pos2: %s  pos3:  %s", self.data, pos2, pos3)
+    def __init__(self, hass, entry_data):
+        self.hass = hass
+        self.data = {}
+        self.previous_data = {}
+        self.entry_data = entry_data  # Stocke les données de configuration
 
     async def getSite(self, data):
         self.data: dict = {}
+        if "email" not in data or "password" not in data:
+            email = self.config_entry.data["zone1"]["email"]
+            password = self.config_entry.data["zone1"]["password"]
+        else:
+            email = data["email"]
+            password = data["password"]
+
         Initjson_data = {
             "locale": "fr",
-            "email": data["email"],
-            "password": data["password"],
+            "email": email,
+            "password": password,
             "type_client": "IOS",
         }
         headers = {
@@ -45,12 +39,9 @@ class FrisquetGetInfo:
 
         }
 
-        email = data["email"]
-        password = data["password"]
-
         _session = aiohttp.ClientSession(headers="")
         _LOGGER.debug("In getSite Frisquet API")
-        async with await _session.post(url=AUTH_API, headers=headers, json=Initjson_data) as resp:
+        async with _session.post(url=AUTH_API, headers=headers, json=Initjson_data) as resp:
             try:  # _LOGGER.debug("In getToken and info json data 1 '%s'" ,self.Initjson_data)
                 json_data = await resp.json()
                 # secondsite = {"nom":"2e Site"}
@@ -66,12 +57,18 @@ class FrisquetGetInfo:
                 ListSite[0] = "No Site Found"
                 return ListSite
 
-    async def getTokenAndInfo(self, data, idx, site):
-        # self.data: dict = {}
+    async def getTokenAndInfo(self, entry, data, idx, site):
+        if "email" not in data or "password" not in data:
+            email = entry.data["zone1"]["email"]
+            password = entry.data["zone1"]["password"]
+        else:
+            email = data["email"]
+            password = data["password"]
+    # Reste de votre logique...
         Initjson_data = {
             "locale": "fr",
-            "email": data["email"],
-            "password": data["password"],
+            "email": email,
+            "password": password,
             "type_client": "IOS",
         }
         headers = {
@@ -85,12 +82,10 @@ class FrisquetGetInfo:
             'User-Agent': 'okhttp/4.12.0'
 
         }
-        email = data["email"]
-        password = data["password"]
-
         _session = aiohttp.ClientSession(headers="")
 
-        async with await _session.post(url=AUTH_API, headers=headers, json=Initjson_data) as resp:
+        async with _session.post(url=AUTH_API, headers=headers, json=Initjson_data) as resp:
+
             try:  # _LOGGER.debug("In getToken and info json data 1 '%s'" ,self.Initjson_data)
                 json_data = await resp.json()
                 # secondsite = {"nom":"2e Site"}
@@ -114,7 +109,7 @@ class FrisquetGetInfo:
                 _session = aiohttp.ClientSession(headers="")
                 # _LOGGER.debug("In PoolFrisquestAPI with url :'%s",_url)
 
-                async with await _session.get(url=_url) as resp:
+                async with _session.get(url=_url) as resp:
                     # if idx == 0:   ##if else to test no response from server
                     response = await resp.json()
                     await _session.close()
@@ -227,7 +222,7 @@ class FrisquetGetInfo:
                         # _LOGGER.debug("In PoolFrisquestAPI with url :'%s",_url2)
 
                         # if site == 0:  # To test Site 2
-                        async with await _session2.get(url=_url2) as resp2:
+                        async with _session2.get(url=_url2) as resp2:
                             response2 = await resp2.json()
                         await _session2.close()
                         _LOGGER.debug("response API energy :'%s", response2)
@@ -274,9 +269,13 @@ class FrisquetGetInfo:
             except:
                 await _session.close()
                # _LOGGER.debug("In PoolFrisquestAPI No zones found in responses :'%s",self.data[data["sites"][site]][idx])
-                self.data[data["sites"][site]][idx] = {}
-                self.data[data["sites"][site]][idx].update(
-                    {"date_derniere_remontee": 0})
-                _LOGGER.debug("In PoolFrisquestAPI Error exception reached :'%s",
-                              self.data[data["sites"][site]][idx])
+                try:
+                    self.data[data["sites"][site]][idx] = {}
+                    self.data[data["sites"][site]][idx].update(
+                        {"date_derniere_remontee": 0})
+                    _LOGGER.debug("In PoolFrisquestAPI Error exception reached :'%s",
+                                  self.data[data["sites"][site]][idx])
+                except:
+                    _LOGGER.debug("In PoolFrisquestAPI Error exception reached no data :'%s",
+                                  self.data)
                 return self.data[data["sites"][site]][idx]

@@ -2,6 +2,8 @@
 import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from datetime import timedelta
 from .const import (
     DOMAIN,
     PLATFORMS,
@@ -10,63 +12,72 @@ from .frisquetAPI import FrisquetGetInfo
 
 _LOGGER = logging.getLogger(__name__)
 
+"""Initialisation du package de l'intégration Frisquet Connect"""
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:  # pylint: disable=unused-argument
-    """Creation des entités à partir d'une configEntry"""
-    _LOGGER.debug("In async_setup_entry __init__.py ")
-    my_api = FrisquetGetInfo(entry.data)
-    if "SiteID" in entry.data:
-        SiteID = entry.data["SiteID"]
-    else:
-        SiteID = 0
-    data = entry.data
-    # firstKeydict = list(data.keys())[1]
-    # await my_api.getTokenAndInfo(data[firstKeydict], 0, SiteID)
+_LOGGER = logging.getLogger(__name__)
 
-    for i in list(data.keys()):
-        if i == "zone1":
-            await my_api.getTokenAndInfo(data[i], 0, SiteID)
-            break
 
-    # _LOGGER.debug(        "Appel de async_setup_entry entry: entry_id='%s', data='%s",        entry.entry_id,        entry.data,    )
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Création des entités à partir d'une configEntry"""
+    _LOGGER.debug("In async_setup_entry __init__.py")
+
+    my_api = FrisquetGetInfo(hass, entry.data)
+
+    async def async_update_data():
+        """Mise à jour des données via l'API."""
+        await my_api.getTokenAndInfo(entry, entry.data["zone1"], 0, entry.data.get("SiteID", 0))
+        return my_api.data
+
+    coordinator = DataUpdateCoordinator(
+        hass,
+        _LOGGER,
+        name="frisquet_coordinator",
+        update_method=async_update_data,
+        update_interval=timedelta(minutes=5),
+    )
+
+    # Stocke le coordinator avec entry.entry_id
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.unique_id] = my_api
+    hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    # entry.async_on_unload(entry.add_update_listener(update_listener))
+    # Démarre la première mise à jour et attends qu'elle soit terminée
+    await coordinator.async_config_entry_first_refresh()
+
+    # Charge les plateformes
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 
 
-# async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Unload a config entry."""
-  #  _LOGGER.debug(f"Début du déchargement de l'entrée {entry.entry_id}")
+    _LOGGER.debug(f"Début du déchargement de l'entrée {entry.entry_id}")
 
-   # unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
-    # if unload_ok:
-    #    if DOMAIN in hass.data and entry.unique_id in hass.data[DOMAIN]:
-    #        await hass.data[DOMAIN].pop(entry.unique_id)
-    #        _LOGGER.debug(
-    #            "Données de l'entrée {entry.entry_id} supprimées de hass.data[{DOMAIN}]")
-    #    else:
-    #        _LOGGER.warning(
-    #            "Aucune donnée trouvée pour l'entrée {entry.entry_id} dans hass.data[{DOMAIN}]")
-    # else:
-    #    _LOGGER.error(
-    #       "Échec du déchargement des plateformes pour l'entrée {entry.entry_id}")
-    # return unload_ok
+    if unload_ok:
+        if DOMAIN in hass.data and entry.unique_id in hass.data[DOMAIN]:
+            hass.data[DOMAIN].pop(entry.unique_id)
+            _LOGGER.debug(
+                "Données de l'entrée {entry.entry_id} supprimées de hass.data[{DOMAIN}]")
+        else:
+            _LOGGER.warning(
+                "Aucune donnée trouvée pour l'entrée {entry.entry_id} dans hass.data[{DOMAIN}]")
+    else:
+        _LOGGER.error(
+            "Échec du déchargement des plateformes pour l'entrée {entry.entry_id}")
+    return unload_ok
 
 
-# async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload the config entry."""
-    # Appelle async_unload_entry puis async_setup_entry pour recharger
-   # for entry in PLATFORMS:
-   #     await async_unload_entry(hass, entry.unique_id)
+   # Appelle async_unload_entry puis async_setup_entry pour recharger
+    for entry in PLATFORMS:
+        await async_unload_entry(hass, entry)
 
-  #  await async_setup_entry(hass, entry.unique_id)
+    await async_setup_entry(hass, entry)
 
 
 async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Fonction qui force le rechargement des entités associées à une configEntry"""
-    await hass.config_entries.async_reload(entry.unique_id)
+    await hass.config_entries.async_reload(entry.entry_id)

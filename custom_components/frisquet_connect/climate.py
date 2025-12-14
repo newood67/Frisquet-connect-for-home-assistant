@@ -2,7 +2,6 @@ from .const import DOMAIN, ORDER_API, WS_API
 from .frisquetAPI import FrisquetGetInfo
 import logging
 from zoneinfo import ZoneInfo
-from datetime import timedelta
 import aiohttp  # type: ignore
 import asyncio
 
@@ -33,9 +32,9 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
 )
 
-from datetime import timedelta, datetime
+from datetime import datetime
 import time
-SCAN_INTERVAL = timedelta(seconds=300)
+
 
 # from .sensor import FrisquetThermometer
 _LOGGER = logging.getLogger(__name__)
@@ -48,29 +47,26 @@ async def async_timeout():
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     """Configuration des entités sensor à partir de la configuration
     ConfigEntry passée en argument"""
-    _LOGGER.debug("In Climate.py asyncsetup entry %s'",
-                  entry.entry_id)  # ["entry_id"])
-    my_api = hass.data[DOMAIN][entry.unique_id]
+    _LOGGER.debug("In Climate.py async_setup_entry %s", entry.entry_id)
+    coordinator = hass.data[DOMAIN][entry.entry_id]  # Utilise entry.entry_id
 
-    coordinator = MyCoordinator(hass, my_api)
-    _LOGGER.debug("In Climate.py asyncsetup entry coordinator = MyCoordinator")
-    _LOGGER.debug("In Climate.py asyncsetup entry2 %s'", coordinator.my_api)
-    coordinator.my_api.data["timezone"] = hass.config.time_zone
+    _LOGGER.debug("In Climate.py asyncsetup entry2 %s'", coordinator.data)
+    coordinator.data["timezone"] = hass.config.time_zone
     entitylist = []
     entity = FrisquetConnectEntity(
-        entry, coordinator.my_api, "zone1", coordinator.my_api.data["nomInstall"])
+        entry, coordinator, "zone1", coordinator.data["nomInstall"])
     entitylist.append(entity)
-    if "zone2" in coordinator.my_api.data[coordinator.my_api.data["nomInstall"]]:
+    if "zone2" in coordinator.data[coordinator.data["nomInstall"]]:
         _LOGGER.debug(
             "In Climate.py asyncsetup entry zone2 found creating a 2nd climate")
         entity2 = FrisquetConnectEntity(
-            entry, coordinator.my_api, "zone2", coordinator.my_api.data["nomInstall"])
+            entry, coordinator, "zone2", coordinator.data["nomInstall"])
         entitylist.append(entity2)
-    if "zone3" in coordinator.my_api.data[coordinator.my_api.data["nomInstall"]]:
+    if "zone3" in coordinator.data[coordinator.data["nomInstall"]]:
         _LOGGER.debug(
             "In Climate.py asyncsetup entry zone2 found creating a 3rd climate")
         entity3 = FrisquetConnectEntity(
-            entry, coordinator.my_api, "zone3", coordinator.my_api.data["nomInstall"])
+            entry, coordinator, "zone3", coordinator.data["nomInstall"])
         entitylist.append(entity3)
     async_add_entities(entitylist, update_before_add=False)
 
@@ -85,42 +81,6 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
     data: dict = {}
     # data = []
     _hass: HomeAssistant
-
-    async def async_update(self):
-
-        _LOGGER.debug("In Climate.py async update %s", self)
-        try:
-
-            site = self.site  # self.coordinator.data["nomInstall"]
-            siteID = self.data[site]["siteID"]
-            self.data[site][self.idx] = await FrisquetGetInfo.getTokenAndInfo(self, self.coordinator.data[site][self.idx], self.idx, siteID)
-            self.data[site]["ecs"] = self.data[site]["ecs"]
-            _LOGGER.debug("In Climate.py async self.data UPDATED")
-        except:
-            self.data[site][self.idx]["date_derniere_remontee"] = 0
-            _LOGGER.debug("In Climate.py async exception reached")
-
-        try:
-            if float(self.data[site][self.idx]["date_derniere_remontee"]) > float(self.TimeLastOrder):
-                if self.device_info["serial_number"] == self.IDchaudiere:
-                    _LOGGER.debug(
-                        "In Climate.py async update in progress %s", self.site)
-                    site = self.site
-                    self._attr_current_temperature = self.data[site][self.idx]["TAMB"] / 10
-                    self.Derogation = self.data[site][self.idx]["DERO"]
-                    self.token = self.data[site][self.idx]["token"]
-                    self._attr_preset_mode = self.defPreset(self.data[site][self.idx]["SELECTEUR"], self.data[site]
-                                                            [self.idx]["MODE"], self.data[site][self.idx]["ACTIVITE_BOOST"], self.data[site][self.idx]["DERO"])
-                    self._attr_hvac_mode = self.modeFrisquetToHVAC(self.data[site][self.idx]["MODE"], self.data[site][self.idx]["DERO"],
-                                                                   self._attr_preset_mode, self.data[site][self.idx]["CAMB"] / 10, self.data[site][self.idx]["TAMB"] / 10)
-                    self._attr_target_temperature = self.defConsigneTemp(
-                        self._attr_preset_mode, self.data[site][self.idx]["CONS_CONF"] / 10, self.data[site][self.idx]["CONS_RED"] / 10, self.data[site][self.idx]["CONS_HG"] / 10)
-
-            else:
-                _LOGGER.debug("In Climate.py async update No Update")
-        except:
-            _LOGGER.debug("In Climate.py async update Exception No Update")
-        # pass
 
     def __init__(self, config_entry: ConfigEntry, coordinator: CoordinatorEntity, idx, site) -> None:
         """Initisalisation de notre entité"""
@@ -167,6 +127,7 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         self._attr_preset_mode = self.defPreset(
             self.Selecteur, self.Mode, self.data[site][idx]["ACTIVITE_BOOST"], self.Derogation)
         # _LOGGER.debug("Init climate  preset: %s",self._attr_preset_mode)
+
         self._attr_hvac_mode = self.modeFrisquetToHVAC(
             self.Mode, self.Derogation, self._attr_preset_mode, self.data[site][idx]["CAMB"] / 10, self.data[site][idx]["TAMB"] / 10)
         # _LOGGER.debug("Init climate  hvac_mode: %s",self._attr_hvac_mode)
@@ -197,14 +158,42 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         """Poll for those entities"""
         return True
 
-   # @property
-   # def translation_key(self):
-   #     return True
-
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         _LOGGER.debug("Climate.py _handle_coordinator_update")
+        try:
+
+            site = self.site  # self.coordinator["nomInstall"]
+            self.data[site][self.idx] = self.coordinator.data[site][self.idx]
+            self.data[site]["ecs"] = self.data[site]["ecs"]
+            _LOGGER.debug("In Climate.py async self.data UPDATED")
+        except:
+            self.data[site][self.idx]["date_derniere_remontee"] = 0
+            _LOGGER.debug("In Climate.py async exception reached")
+
+        try:
+            if float(self.data[site][self.idx]["date_derniere_remontee"]) > float(self.TimeLastOrder):
+                if self.device_info["serial_number"] == self.IDchaudiere:
+                    _LOGGER.debug(
+                        "In Climate.py async update in progress %s", self.site)
+                    site = self.site
+                    self._attr_current_temperature = self.data[site][self.idx]["TAMB"] / 10
+                    self.Derogation = self.data[site][self.idx]["DERO"]
+                    self.token = self.data[site][self.idx]["token"]
+                    self._attr_preset_mode = self.defPreset(self.data[site][self.idx]["SELECTEUR"], self.data[site]
+                                                            [self.idx]["MODE"], self.data[site][self.idx]["ACTIVITE_BOOST"], self.data[site][self.idx]["DERO"])
+                    self._attr_hvac_mode = self.modeFrisquetToHVAC(self.data[site][self.idx]["MODE"], self.data[site][self.idx]["DERO"],
+                                                                   self._attr_preset_mode, self.data[site][self.idx]["CAMB"] / 10, self.data[site][self.idx]["TAMB"] / 10)
+                    self.async_write_ha_state()
+                    self._attr_target_temperature = self.defConsigneTemp(
+                        self._attr_preset_mode, self.data[site][self.idx]["CONS_CONF"] / 10, self.data[site][self.idx]["CONS_RED"] / 10, self.data[site][self.idx]["CONS_HG"] / 10)
+
+            else:
+                _LOGGER.debug("In Climate.py async update No Update")
+        except:
+            _LOGGER.debug("In Climate.py async update Exception No Update")
+        # pass
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Set new target hvac mode."""
@@ -227,8 +216,9 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
             await self.OrderToFrisquestAPI(_key, mode)
             self._attr_preset_mode = self.getPresetFromProgramation()
             self._attr_target_temperature = self.defConsigneTemp(self.getPresetFromProgramation(
-                # self.data["CAMB"] /10
             ), self.data[self.site][self.idx]["CONS_CONF"] / 10, self.data[self.site][self.idx]["CONS_RED"] / 10, self.data[self.site][self.idx]["CONS_HG"] / 10)
+            self.hvac_mode = "auto"
+        elif hvac_mode == "auto" or self.data[self.site][self.idx]["SELECTEUR"] + 5:
             self.hvac_mode = "auto"
         else:
             pass
@@ -343,6 +333,7 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
 
     def defConsigneTemp(self, preset_mode, CONS_CONF, CONS_RED, CONS_HG):
         _LOGGER.debug("In DefconsigneTemp %s", preset_mode)
+
         if preset_mode == "comfort" or preset_mode == "confort_permanent":
             _LOGGER.debug("In DefconsigneTemp comfort is true: %s", CONS_CONF)
             return CONS_CONF
@@ -399,17 +390,30 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         uri = WS_API+"?token="+self.token+"&identifiant_chaudiere=" + \
             self.IDchaudiere  # Remplacez par l'URI de votre WebSocket
         _LOGGER.debug("In websocket_confirmation with url : '%s", uri)
-        async with _session.ws_connect(uri) as ws:
-            await ws.send_str(str({"type": "ORDRE_EN_ATTENTE"}))
-            _LOGGER.debug("In websocket_confirmation order sent")
-            async for msg in ws:
-                if msg.type == aiohttp.WSMsgType.TEXT:
-                    print("Message reçu :", msg.data)
+        try:
+            async with _session.ws_connect(uri) as ws:
+                await ws.send_str(str({"type": "ORDRE_EN_ATTENTE"}))
+                _LOGGER.debug("In websocket_confirmation order sent")
+                async for msg in ws:
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        print("Message reçu :", msg.data)
 
-                elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR, "ORDRE_OK"):
-                    break
+                        if msg.data == '{"type":"ORDRE_EN_ATTENTE"}':
+                            try:
+                                pass  # await self.async_update()
+                                # self.async_write_ha_state()
 
+                            except:
+                                _LOGGER.debug(
+                                    "In websocket_confirmation exception during update after ordre en attente")
+
+                    elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR, "ORDRE_OK"):
+                        break
+        except Exception as e:
+            _LOGGER.error("Erreur dans websocket_confirmation : %s", e)
+        finally:
             await _session.close()
+            _LOGGER.debug("Session WebSocket fermée")
 
     async def OrderToFrisquestAPI(self, key, valeur):
         if key == "MODE_ECS":
@@ -461,42 +465,3 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         #    loop.run_until_complete(tsk)
         # else:
         #    asyncio.run(self.websocket_confirmation())
-
-
-class MyCoordinator(DataUpdateCoordinator):
-    """My custom coordinator."""
-
-    def __init__(self, hass, my_api):
-        """Initialize my coordinator."""
-        _LOGGER.debug("__init__ in mycoordinator'%s'", my_api)
-        super().__init__(hass, _LOGGER,
-                         # Name of the data. For logging purposes.
-                         name="My sensor",
-                         # Polling interval. Will only be polled if there are subscribers.
-                         update_interval=SCAN_INTERVAL,
-
-                         )
-        self.my_api = my_api
-
-    async def _async_update_data(self):
-        _LOGGER.debug("in _async_update_data MyCoordinator")
-        try:
-            # Note: asyncio.TimeoutError and aiohttp.ClientError
-            #  are already
-            # handled by the data update coordinator.
-            async with async_timeout.timeout(10):
-                # Grab active context variables to limit data required to be fetched from API
-                # Note: using context is not required if there is no need or ability to limit
-                # data retrieved from API.
-                # listening_idx = set(self.async_contexts())
-                # return await self.my_api.fetch_data(listening_idx)
-                _LOGGER.debug("in mycoordinator _async_update_data")
-                # return await self.my_api.getTokenAndInfo()
-                self = await self.my_api.getTokenAndInfo()
-
-        except:  # NameError as err:
-            # :'%s'", err)
-            _LOGGER.debug("in mycoordinator _async_update_data ERROR")
-
-    async def async_add_listener(self):
-        _LOGGER.debug("in mycoordinator async_add_listener")  # :'%s'", err)

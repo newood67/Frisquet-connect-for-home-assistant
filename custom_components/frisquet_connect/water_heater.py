@@ -1,144 +1,134 @@
 import logging
 from homeassistant.components.water_heater import WaterHeaterEntity, WaterHeaterEntityFeature
-from .climate import MyCoordinator, FrisquetConnectEntity
-from .const import WaterHeaterModes
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-)
-from homeassistant.helpers.entity_platform import (
-    AddEntitiesCallback,)
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.core import HomeAssistant, callback
-from .const import DOMAIN
-from datetime import timedelta
-SCAN_INTERVAL = timedelta(seconds=150)
+
+from .climate import FrisquetConnectEntity
+from .const import DOMAIN, WaterHeaterModes
+
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
     _LOGGER.debug("water heater setup_entry")
 
-    my_api = hass.data[DOMAIN][entry.unique_id]
+    coordinator = hass.data[DOMAIN][entry.entry_id]  # Utilise entry.entry_id
 
-    coordinator = MyCoordinator(hass, my_api)
-    site = coordinator.my_api.data["nomInstall"]
+    # Vérifie que coordinator.data est bien initialisé
+    if not coordinator.data:
+        _LOGGER.error("coordinator.data est vide ou None !")
+        return
 
-    if "ecs" in coordinator.my_api.data[site]:
-        if coordinator.my_api.data[site]["ecs"]["TYPE_ECS"] is not None:
-            entity = FrisquetWaterHeater(
-                entry, coordinator.my_api, "MODE_ECS")  # .data[site]
+    site = coordinator.data.get("nomInstall")
+    if not site:
+        _LOGGER.error(
+            "La clé 'nomInstall' est manquante dans coordinator.data !")
+        return
+
+    if "ecs" in coordinator.data[site]:
+        if coordinator.data[site]["ecs"]["TYPE_ECS"] is not None:
+            entity = FrisquetWaterHeater(entry, coordinator, "MODE_ECS")
             async_add_entities([entity], update_before_add=False)
-        elif coordinator.my_api.data[site]["ecs"]["MODE_ECS_PAC"] is not None:
-            entity = FrisquetWaterHeater(
-                entry, coordinator.my_api, "MODE_ECS_PAC")  # .data[site]
+        elif coordinator.data[site]["ecs"]["MODE_ECS_PAC"] is not None:
+            entity = FrisquetWaterHeater(entry, coordinator, "MODE_ECS_PAC")
             async_add_entities([entity], update_before_add=False)
-
-
-async def async_add_listener():
-    _LOGGER.debug("water heater add_listener")
 
 
 class FrisquetWaterHeater(WaterHeaterEntity, CoordinatorEntity):
-    data: dict = {}
-    _hass: HomeAssistant
-
-    async def async_update(self):
-        try:
-            _LOGGER.debug("In sensor.py async update water heater site: %s mode: %s",
-                          self.site, self.coordinator.data[self.site]["ecs"][self.idx]["nom"])
-            self.current_operation = self.FrisquetToOperation(
-                self.coordinator.data[self.site]["ecs"][self.idx]["id"], self.idx)
-            self.token = self.coordinator.data[self.site]["zone1"]["token"]
-        except Exception as e:
-            _LOGGER.error("Error in async_update water heater: %s", e)
-
-    def __init__(self, config_entry: ConfigEntry, coordinator: CoordinatorEntity, idx) -> None:
-
-        _LOGGER.debug("Sensors INIT Coordinator : %s", coordinator)
+    def __init__(self, config_entry: ConfigEntry, coordinator: CoordinatorEntity, idx: str) -> None:
         super().__init__(coordinator)
-        site = config_entry.title
-        self.site = site
-        self._attr_name = "Chauffe-eau " + self.site
-        self.IDchaudiere = coordinator.data[self.site]["zone1"]["identifiant_chaudiere"]
-        self.token = coordinator.data[self.site]["zone1"]["token"]
-
-        self._attr_unique_id = "WH"+self.IDchaudiere + str(9)
+        self.site = config_entry.title
+        self._attr_name = f"Chauffe-eau {self.site}"
         self.idx = idx
-        self.operation_list = []
-        if "MAX" in coordinator.data[self.site]["modes_ecs_"]:
-            self.operation_list.append(WaterHeaterModes.MAX)
-        if "Eco" in coordinator.data[self.site]["modes_ecs_"]:
-            self.operation_list.append(WaterHeaterModes.ECO)
-        if "Eco Timer" in coordinator.data[self.site]["modes_ecs_"]:
-            self.operation_list.append(WaterHeaterModes.ECOT)
-        if "Eco +" in coordinator.data[self.site]["modes_ecs_"]:
-            self.operation_list.append(WaterHeaterModes.ECOP)
-        if "Eco + Timer" in coordinator.data[self.site]["modes_ecs_"]:
-            self.operation_list.append(WaterHeaterModes.ECOPT)
-        if "Stop" in coordinator.data[self.site]["modes_ecs_"]:
-            self.operation_list.append(WaterHeaterModes.OFF)
-        if "On" in coordinator.data[self.site]["modes_ecs_"]:
-            self.operation_list.append(WaterHeaterModes.OFF)
-
-        self.current_operation = self.FrisquetToOperation(
+        self._attr_unique_id = f"WH{coordinator.data[self.site]['zone1']['identifiant_chaudiere']}9"
+        self.operation_list = self._build_operation_list(
+            coordinator.data[self.site]["modes_ecs_"])
+        self._attr_current_operation = self._frisquet_to_operation(
             coordinator.data[self.site]["ecs"][idx]["id"], idx)
-
-        self.temperature_unit = "°C"
-        self._attr_supported_features = WaterHeaterEntityFeature.OPERATION_MODE
+        self._attr_temperature_unit = "°C"
+        # self.current_operation = self._frisquet_to_operation(
+        #    coordinator.data[self.site]["ecs"][idx]["id"], idx)
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return the device info."""
         return DeviceInfo(
             identifiers={
-                # Serial numbers are unique identifiers within a specific domain
-                # self.unique_id)
-                (DOMAIN, self.coordinator.data[self.site]
-                 ["zone1"]["identifiant_chaudiere"])
-            },
-            name=self.site,  # self.name
+                (DOMAIN, self.coordinator.data[self.site]["zone1"]["identifiant_chaudiere"])},
+            name=self.site,
             manufacturer="Frisquet",
             model=self.coordinator.data[self.site]["zone1"]["produit"],
             serial_number=self.coordinator.data[self.site]["zone1"]["identifiant_chaudiere"],
         )
 
     @property
-    def should_poll(self) -> bool:
-        """Poll for those entities"""
-        return True
+    def current_operation(self):
+        """Return the current operation mode."""
+        return self._frisquet_to_operation(self.coordinator.data[self.site]["ecs"][self.idx]["id"], self.idx)
+
+    @property
+    def supported_features(self):
+        return WaterHeaterEntityFeature.OPERATION_MODE
+
+    @property
+    def available_operations(self):
+        return self.operation_list
+
+    @callback
+    def _handle_coordinator_update(self):
+        try:
+            _LOGGER.debug("In water heater.py _handle_coordinator_update")
+            self._attr_current_operation = self._frisquet_to_operation(
+                self.coordinator.data[self.site]["ecs"][self.idx]["id"], self.idx)
+            self.token = self.coordinator.data[self.site]["zone1"]["token"]
+        except Exception as e:
+            _LOGGER.error("Error in async_update water heater: %s", e)
+
+    async def async_set_operation_mode(self, operation_mode: str) -> None:
+        mode = self.coordinator.data[self.site]["modes_ecs_"][operation_mode]
+        self.coordinator.data[self.site]["ecs"][self.idx]["id"] = mode
+        await self._send_order_to_api(self.idx, mode)
 
     async def async_turn_on(self):
         if self.idx == "MODE_ECS_PAC":
             operation_mode = "On"
-            mode = int(5)
+            mode = 5
         else:
             operation_mode = "Eco"
-            mode = int(1)
-
-        self.current_operation = operation_mode
-        await FrisquetConnectEntity.OrderToFrisquestAPI(self, self.idx, mode)
+            mode = 1
+        await self._send_order_to_api(self.idx, mode)
 
     async def async_turn_off(self):
-
-        mode = int(self.coordinator.data[self.site]
-                   ["modes_ecs_"][operation_mode])
-
         operation_mode = "Stop"
-        self.current_operation = operation_mode
-        await FrisquetConnectEntity.OrderToFrisquestAPI(self, self.idx, mode)
-        pass
+        mode = self.coordinator.data[self.site]["modes_ecs_"][operation_mode]
+        await self._send_order_to_api(self.idx, mode)
 
-    async def async_set_operation_mode(self, operation_mode: str) -> None:
-        mode = int(self.coordinator.data[self.site]
-                   ["modes_ecs_"][operation_mode])
+    def _build_operation_list(self, modes_ecs):
+        operation_list = []
+        for mode_name, mode_id in modes_ecs.items():
+            if mode_name == "MAX":
+                operation_list.append(WaterHeaterModes.MAX)
+            elif mode_name == "Eco":
+                operation_list.append(WaterHeaterModes.ECO)
+            elif mode_name == "Eco Timer":
+                operation_list.append(WaterHeaterModes.ECOT)
+            elif mode_name == "Eco +":
+                operation_list.append(WaterHeaterModes.ECOP)
+            elif mode_name == "Eco + Timer":
+                operation_list.append(WaterHeaterModes.ECOPT)
+            elif mode_name == "Stop":
+                operation_list.append(WaterHeaterModes.OFF)
+            elif mode_name == "On":
+                operation_list.append(WaterHeaterModes.ON)
+        return operation_list
 
-        self.current_operation = operation_mode
-        self.coordinator.data[self.site]["ecs"][self.idx]["id"] = mode
-        await FrisquetConnectEntity.OrderToFrisquestAPI(self, self.idx, mode)
+    def _frisquet_to_operation(self, id_frisquet, idx):
+        for mode_name, mode_id in self.coordinator.data[self.site]["modes_ecs_"].items():
+            if mode_id == id_frisquet:
+                return mode_name
+        return None
 
-    def FrisquetToOperation(self, idFrisquet, idx):
-        for k in self.coordinator.data[self.site]["modes_ecs_"].items():
-            if k[1] == idFrisquet:
-                return k[0]
+    async def _send_order_to_api(self, idx, mode):
+        # Logique pour envoyer la commande à l'API
+        await FrisquetConnectEntity.OrderToFrisquestAPI(self, idx, mode)
