@@ -6,8 +6,8 @@ DOMAIN = "frisquet_connect"
 PLATFORMS: list[Platform] = [Platform.CLIMATE,
                              Platform.SENSOR, Platform.WATER_HEATER
                              ]
-# ?app_id=dXk9XRsJQ8WfuO3IAsgpxr"
-AUTH_API = "https://fcutappli.frisquet.com/api/v1/authentifications"
+
+AUTH_API = "https://fcutappli.frisquet.com/api/v1/authentifications?app_id=dXk9XRsJQ8WfuO3IAsgpyr"
 API_URL = "https://fcutappli.frisquet.com/api/v1/sites/"
 ORDER_API = "https://fcutappli.frisquet.com/api/v1/ordres/"
 WS_API = "https://fcappcom.frisquet.com/"

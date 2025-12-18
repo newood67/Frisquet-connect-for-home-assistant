@@ -48,8 +48,9 @@ class FrisquetWaterHeater(WaterHeaterEntity, CoordinatorEntity):
         self._attr_current_operation = self._frisquet_to_operation(
             coordinator.data[self.site]["ecs"][idx]["id"], idx)
         self._attr_temperature_unit = "°C"
-        # self.current_operation = self._frisquet_to_operation(
-        #    coordinator.data[self.site]["ecs"][idx]["id"], idx)
+        # NEWOOD ADD :
+        self.IDchaudiere = coordinator.data[self.site]['zone1']['identifiant_chaudiere']
+        self.token = coordinator.data[self.site]['zone1']['token']
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -75,6 +76,10 @@ class FrisquetWaterHeater(WaterHeaterEntity, CoordinatorEntity):
     def available_operations(self):
         return self.operation_list
 
+    @property
+    def supported_features(self):
+        return (WaterHeaterEntityFeature.OPERATION_MODE | WaterHeaterEntityFeature.ON_OFF)
+
     @callback
     def _handle_coordinator_update(self):
         try:
@@ -82,12 +87,19 @@ class FrisquetWaterHeater(WaterHeaterEntity, CoordinatorEntity):
             self._attr_current_operation = self._frisquet_to_operation(
                 self.coordinator.data[self.site]["ecs"][self.idx]["id"], self.idx)
             self.token = self.coordinator.data[self.site]["zone1"]["token"]
+            # NEWOOD ADD :
+            self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error("Error in async_update water heater: %s", e)
 
     async def async_set_operation_mode(self, operation_mode: str) -> None:
         mode = self.coordinator.data[self.site]["modes_ecs_"][operation_mode]
         self.coordinator.data[self.site]["ecs"][self.idx]["id"] = mode
+
+        # NEWOOD ADD :
+        self._attr_current_operation = operation_mode
+        self.async_write_ha_state()
+
         await self._send_order_to_api(self.idx, mode)
 
     async def async_turn_on(self):
@@ -97,12 +109,12 @@ class FrisquetWaterHeater(WaterHeaterEntity, CoordinatorEntity):
         else:
             operation_mode = "Eco"
             mode = 1
-        await self._send_order_to_api(self.idx, mode)
+        await self.async_set_operation_mode(operation_mode)
 
     async def async_turn_off(self):
         operation_mode = "Stop"
         mode = self.coordinator.data[self.site]["modes_ecs_"][operation_mode]
-        await self._send_order_to_api(self.idx, mode)
+        await self.async_set_operation_mode(operation_mode)
 
     def _build_operation_list(self, modes_ecs):
         operation_list = []

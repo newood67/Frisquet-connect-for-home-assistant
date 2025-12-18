@@ -1,5 +1,7 @@
 import logging
 import aiohttp
+import random
+import string
 from .const import AUTH_API, API_URL
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,7 +43,10 @@ class FrisquetGetInfo:
 
         _session = aiohttp.ClientSession(headers="")
         _LOGGER.debug("In getSite Frisquet API")
-        async with _session.post(url=AUTH_API, headers=headers, json=Initjson_data) as resp:
+        appid = self.generer_Appid_random()
+        _AUTH_API = AUTH_API + '&app_id=' + appid
+        _LOGGER.debug("In getSite Frisquet API with appid : %s", appid)
+        async with _session.post(url=_AUTH_API, headers=headers, json=Initjson_data) as resp:
             try:  # _LOGGER.debug("In getToken and info json data 1 '%s'" ,self.Initjson_data)
                 json_data = await resp.json()
                 # secondsite = {"nom":"2e Site"}
@@ -83,8 +88,10 @@ class FrisquetGetInfo:
 
         }
         _session = aiohttp.ClientSession(headers="")
-
-        async with _session.post(url=AUTH_API, headers=headers, json=Initjson_data) as resp:
+        appid = self.generer_Appid_random()
+        _AUTH_API = AUTH_API + '&app_id=' + appid
+        _LOGGER.debug("In getTokenAndInfo  with appid : %s", appid)
+        async with _session.post(url=_AUTH_API, headers=headers, json=Initjson_data) as resp:
 
             try:  # _LOGGER.debug("In getToken and info json data 1 '%s'" ,self.Initjson_data)
                 json_data = await resp.json()
@@ -279,3 +286,7 @@ class FrisquetGetInfo:
                     _LOGGER.debug("In PoolFrisquestAPI Error exception reached no data :'%s",
                                   self.data)
                 return self.data[data["sites"][site]][idx]
+
+    def generer_Appid_random(self, longueur=22):
+        caracteres = string.ascii_letters + string.digits
+        return ''.join(random.choice(caracteres) for _ in range(longueur))
