@@ -44,7 +44,7 @@ class FrisquetGetInfo:
         _session = aiohttp.ClientSession(headers="")
         _LOGGER.debug("In getSite Frisquet API")
         appid = self.generer_Appid_random()
-        _AUTH_API = AUTH_API + '&app_id=' + appid
+        _AUTH_API = AUTH_API + '?app_id=' + appid
         _LOGGER.debug("In getSite Frisquet API with appid : %s", appid)
         async with _session.post(url=_AUTH_API, headers=headers, json=Initjson_data) as resp:
             try:  # _LOGGER.debug("In getToken and info json data 1 '%s'" ,self.Initjson_data)
@@ -89,7 +89,7 @@ class FrisquetGetInfo:
         }
         _session = aiohttp.ClientSession(headers="")
         appid = self.generer_Appid_random()
-        _AUTH_API = AUTH_API + '&app_id=' + appid
+        _AUTH_API = AUTH_API + '?app_id=' + appid
         _LOGGER.debug("In getTokenAndInfo  with appid : %s", appid)
         async with _session.post(url=_AUTH_API, headers=headers, json=Initjson_data) as resp:
 
