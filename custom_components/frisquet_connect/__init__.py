@@ -56,8 +56,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
-        if DOMAIN in hass.data and entry.unique_id in hass.data[DOMAIN]:
-            hass.data[DOMAIN].pop(entry.unique_id)
+        if DOMAIN in hass.data and entry.entry_id in hass.data[DOMAIN]:
+            hass.data[DOMAIN].pop(entry.entry_id)
             _LOGGER.debug(
                 "Données de l'entrée {entry.entry_id} supprimées de hass.data[{DOMAIN}]")
         else:
@@ -81,3 +81,4 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Fonction qui force le rechargement des entités associées à une configEntry"""
     await hass.config_entries.async_reload(entry.entry_id)
+
