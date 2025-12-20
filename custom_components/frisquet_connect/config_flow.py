@@ -30,14 +30,26 @@ class FrisquetConfigFlow(ConfigFlow, domain=DOMAIN):
         self.data.update(user_input)
 
         # Crée une instance de FrisquetGetInfo avec les bons arguments
-        frisquet_api = FrisquetGetInfo(self.hass, user_input)
 
-        # Appelle getSite sur l'instance de FrisquetGetInfo avec l'argument user_input
-        sites = await frisquet_api.getSite(user_input)
+        #Newood  : ajout de "self."
+        self.frisquet_api = FrisquetGetInfo(self.hass, self.data)
+        
+        #Newood : 1ère Authentification + récupération site
+        auth = await self.frisquet_api.api_auth(
+            user_input["email"],
+            user_input["password"],
+        )
 
+        #Newood : token, email, password pour la suite
         self.data["email"] = user_input["email"]
         self.data["password"] = user_input["password"]
-        self.data["sites"] = sites
+        self.data["token"] = auth["token"]
+
+        #Newood : Récupération des sites
+        self.data["sites"] = [s["nom"] for s in auth["utilisateur"]["sites"]]
+
+        #Newood : ID chaudière site 0
+        self.data["identifiant_chaudiere"] = auth["utilisateur"]["sites"][0]["identifiant_chaudiere"]
 
         return await self.async_step_2()
 
@@ -59,17 +71,22 @@ class FrisquetConfigFlow(ConfigFlow, domain=DOMAIN):
             self.datadict.append("")
 
         # Crée une instance de FrisquetGetInfo avec les bons arguments
-        frisquet_api = FrisquetGetInfo(self.hass, self.data)
+        # frisquet_api = FrisquetGetInfo(self.hass, self.data)
 
         # Appelle getTokenAndInfo sur l'instance de FrisquetGetInfo avec les bons arguments
-        self.data[site] = await frisquet_api.getTokenAndInfo(self,self.data, 0, site)
+        #Newood  : ajout de "self."
+        self.data[site] = await self.frisquet_api.getTokenAndInfo(self,self.data, 0, site)
 
         _LOGGER.debug("Config_Flow data=%s", self.data)
 
         self.datadict[site] = self.data[site]
         self.datadict[site]["nomInstall"] = self.data["sites"][site]
         self.datadict[site]["SiteID"] = site
+        self.datadict[site]["email"] = self.data["email"]
+        self.datadict[site]["password"] = self.data["password"]
+        self.datadict[site]["token"] = self.data["token"]
+        self.datadict[site]["identifiant_chaudiere"] = self.data["identifiant_chaudiere"]
 
+        #await self.async_set_unique_id(str(self.datadict[site]["zone1"]["identifiant_chaudiere"]))
         await self.async_set_unique_id(str(self.datadict[site]["zone1"]["identifiant_chaudiere"]))
-
         return self.async_create_entry(title=self.datadict[site]["nomInstall"], data=self.datadict[site])
