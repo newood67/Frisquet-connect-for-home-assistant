@@ -91,8 +91,9 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         self.data[site] = {}
         self.data[site][idx] = {}
         self.data[site].update(coordinator.data[site])
-        self.site = config_entry.title
-        self.sites = config_entry.data["zone1"]["sites"]
+        self.site = config_entry.title*
+        #Newood : not used
+        #self.sites = config_entry.data["zone1"]["sites"]
         self.tz = coordinator.data["timezone"]
         # _LOGGER.debug("Init Entity='%s'", self.data[site][idx] )
         self._attr_unique_id = str(
