@@ -14,7 +14,7 @@ class FrisquetGetInfo:
         self.hass = hass
         self.data: dict = {}
         self.previousdata = {}
-        self.entry_data = entry_data 
+        self.entry_data = entry_data  # Stocke les données de configuration
 
     def generer_Appid_random(self, longueur=22):
         caracteres = string.ascii_letters + string.digits
@@ -38,10 +38,13 @@ class FrisquetGetInfo:
             'Accept-Encoding': 'gzip',
             'User-Agent': 'okhttp/4.12.0'
         }
-
+            #'Content-Length': str(len(str(payload))),
+            #'Host': 'fcutappli.frisquet.com',
         appid = self.generer_Appid_random()
         _AUTH_API = AUTH_API + '?app_id=' + appid
         _LOGGER.debug("Authentification call : %s",_AUTH_API)
+
+        #_session = aiohttp.ClientSession(headers="")
 
         async with aiohttp.ClientSession() as session:
             async with session.post(url=_AUTH_API, headers=headers, json=payload) as resp:
@@ -49,25 +52,19 @@ class FrisquetGetInfo:
                     raise Exception(f"Authentification failed with http ({resp.status})")
                 return await resp.json()
 
-    async def getSite(self, data):
-        auth_json_reply = await self.api_auth(data["email"], data["password"])
-        try:
-            sites = auth_json_reply["utilisateur"]["sites"]
-            if not sites:
-                return ["No Site Found"]
-            return [s["nom"] for s in sites]
-
-        except (KeyError, TypeError):
-            _LOGGER.warning("No site information returned by Frisquet API")
-            return ["No Site Found"]
-
     async def getTokenAndInfo(self, entry, data, idx, site, retry=False):
-        #retry=False : Pour pouvoir relancer 1 fois en cas de token expiré
-
-        # logins
-        email    = entry.data["zone1"]["email"]
-        password = entry.data["zone1"]["password"]
-
+        #retry=False : Pour pouvoir relancé 1 fois ne cas de token expiré
+        _LOGGER.debug("JKS entry data : %s",entry.data  )
+        # Credentials
+        #email    = entry.data["zone1"]["email"]
+        #password = entry.data["zone1"]["password"]
+        # Si on a une zone sinon prendre l'entrée du formulaire
+        #if entry.data.get("zone1"):
+        #    email = zone1["email"]
+        #    password = zone1["password"]
+       # else:
+        email = entry.data.get("email")
+        password = entry.data.get("password")
         # Authentification 
         token = data.get("token")
         auth_json_reply = None
@@ -118,46 +115,48 @@ class FrisquetGetInfo:
 
         _LOGGER.debug("In getToken and info Frisquet API, response : %s", reponseAnonimized)
 
+        site_name = data.get("nomInstall", f"site_{site}")
+
         if "zones" in response or idx == 0:
             for i in range(len(response["zones"])):
                 if response["zones"][i]["numero"] != "":
                     if i == 0:
-                        self.data[data["sites"][site]] = {}
-                        self.data[data["sites"][site]]["alarmes"] = {}
+                        self.data[site_name] = {}
+                        self.data[site_name]["alarmes"] = {}
 
-                    self.data[data["sites"][site]]["alarmes"]                                   = response["alarmes"]
-                    self.data[data["sites"][site]]["zone"+  str(i+1)]                           = {}
-                    self.data[data["sites"][site]]["zone" + str(i+1)]                           = response["zones"][i]["carac_zone"]
-                    self.data[data["sites"][site]]["zone" + str(i+1)]["boost_disponible"]       = response["zones"][i]["boost_disponible"]
-                    self.data[data["sites"][site]]["zone" + str(i+1)]["identifiant"]            = response["zones"][i]["identifiant"]
-                    self.data[data["sites"][site]]["zone" + str(i+1)]["numero"]                 = response["zones"][i]["numero"]
-                    self.data[data["sites"][site]]["zone" + str(i+1)]["nom"]                    = response["zones"][i]["nom"]
-                    self.data[data["sites"][site]]["zone" + str(i+1)]["programmation"]          = response["zones"][i]["programmation"]
-                    self.data[data["sites"][site]]["zone" + str(i+1)]["date_derniere_remontee"] = response["date_derniere_remontee"]
+                    self.data[site_name]["alarmes"]                                   = response["alarmes"]
+                    self.data[site_name]["zone"+  str(i+1)]                           = {}
+                    self.data[site_name]["zone" + str(i+1)]                           = response["zones"][i]["carac_zone"]
+                    self.data[site_name]["zone" + str(i+1)]["boost_disponible"]       = response["zones"][i]["boost_disponible"]
+                    self.data[site_name]["zone" + str(i+1)]["identifiant"]            = response["zones"][i]["identifiant"]
+                    self.data[site_name]["zone" + str(i+1)]["numero"]                 = response["zones"][i]["numero"]
+                    self.data[site_name]["zone" + str(i+1)]["nom"]                    = response["zones"][i]["nom"]
+                    self.data[site_name]["zone" + str(i+1)]["programmation"]          = response["zones"][i]["programmation"]
+                    self.data[site_name]["zone" + str(i+1)]["date_derniere_remontee"] = response["date_derniere_remontee"]
 
                     if response["produit"]["chaudiere"] == None:
-                        self.data[data["sites"][site]]["zone" + str(i+1)]["produit"]    = "Not defined"
+                        self.data[site_name]["zone" + str(i+1)]["produit"]    = "Not defined"
                     else:
-                        self.data[data["sites"][site]]["zone" + str(i+1)]["produit"]    = response["produit"]["chaudiere"]+" "+response["produit"]["gamme"]+" " + response["produit"]["puissance"]
+                        self.data[site_name]["zone" + str(i+1)]["produit"]    = response["produit"]["chaudiere"]+" "+response["produit"]["gamme"]+" " + response["produit"]["puissance"]
 
-                    self.data[data["sites"][site]]["zone" + str(i+1)]["identifiant_chaudiere"]    = response["identifiant_chaudiere"]
+                    self.data[site_name]["zone" + str(i+1)]["identifiant_chaudiere"]    = response["identifiant_chaudiere"]
 
-                    self.data[data["sites"][site]]["zone" + str(i+1)]["token"] = token
+                    self.data[site_name]["zone" + str(i+1)]["token"] = token
                     
                     if "sites" in data:
-                        self.data[data["sites"][site]]["nomInstall"]    = data["sites"][site]
-                        self.data[data["sites"][site]]["siteID"]        = site
+                        self.data[site_name]["nomInstall"]    = data["sites"][site]
+                        self.data[site_name]["siteID"]        = site
                         self.data["nomInstall"]                         = data["sites"][site]
                     elif "nomInstall" in data:
-                        self.data[data["sites"][site]]["nomInstall"]    = data["nomInstall"]
-                        self.data[data["sites"][site]]["siteID"]        = site
+                        self.data[site_name]["nomInstall"]    = data["nomInstall"]
+                        self.data[site_name]["siteID"]        = site
                         self.data["nomInstall"]                         = data["nomInstall"]
 
-                    self.data[data["sites"][site]]["zone" + str(i+1)]["email"]          = email
-                    self.data[data["sites"][site]]["zone" + str(i+1)]["password"]       = password
-                    self.data[data["sites"][site]]["zone" + str(i+1)]["T_EXT"]          = response["environnement"]["T_EXT"]
+                    self.data[site_name]["zone" + str(i+1)]["email"]          = email
+                    self.data[site_name]["zone" + str(i+1)]["password"]       = password
+                    self.data[site_name]["zone" + str(i+1)]["T_EXT"]          = response["environnement"]["T_EXT"]
 
-                    self.data[data["sites"][site]]["modes_ecs_"]        = {}
+                    self.data[site_name]["modes_ecs_"]        = {}
 
                     for w in range(len(response["modes_ecs"])):
                         nomModeECS: str
@@ -165,11 +164,15 @@ class FrisquetGetInfo:
                         nomModeECS = response["modes_ecs"][w]["nom"]
                         nomModeECS = nomModeECS.replace("\ue809", "Timer")
                         idModeECS = response["modes_ecs"][w]["id"]
-                        self.data[data["sites"][site]]["modes_ecs_"][nomModeECS] = {}
-                        self.data[data["sites"][site]]["modes_ecs_"][nomModeECS] = idModeECS
+                        self.data[site_name]["modes_ecs_"][nomModeECS] = {}
+                        self.data[site_name]["modes_ecs_"][nomModeECS] = idModeECS
 
 
-            self.data[data["sites"][site]]["ecs"] = response["ecs"]
+            self.data[site_name]["ecs"] = response["ecs"]
+
+            self.data["email"]                  = email
+            self.data["password"]               = password
+            self.data["identifiant_chaudiere"]  = identifiant
             
             #Conso
             try:
@@ -179,13 +182,13 @@ class FrisquetGetInfo:
                     async with session2.get(url2) as resp2:
                         conso = await resp2.json()
 
-                self.data[data["sites"][site]]["zone1"]["energy"] = {}
-                self.data[data["sites"][site]]["zone1"]["energy"]["CHF"] = sum(
+                self.data[site_name]["zone1"]["energy"] = {}
+                self.data[site_name]["zone1"]["energy"]["CHF"] = sum(
                     c["valeur"] for c in conso.get("CHF", [])
                 )
 
                 if "SAN" in conso:
-                    self.data[data["sites"][site]]["zone1"]["energy"]["SAN"] = sum(
+                    self.data[site_name]["zone1"]["energy"]["SAN"] = sum(
                         c["valeur"] for c in conso.get("SAN", [])
                 )
 
@@ -197,9 +200,9 @@ class FrisquetGetInfo:
 
 
             if idx == 0:
-                return self.data[data["sites"][site]]
+                return self.data[site_name]
             else:
-                return self.data[data["sites"][site]][idx]
+                return self.data[site_name][idx]
 
 
         return self.previousdata
