@@ -25,7 +25,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def async_update_data():
         """Mise à jour des données via l'API."""
-        await my_api.getTokenAndInfo(entry, entry.data["zone1"], 0, entry.data.get("SiteID", 0))
+        #entry.data["zone1"] newood
+        await my_api.getTokenAndInfo(entry, entry.data, 0, entry.data.get("SiteID", 0))
         return my_api.data
 
     coordinator = DataUpdateCoordinator(
