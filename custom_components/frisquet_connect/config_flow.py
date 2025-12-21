@@ -81,7 +81,7 @@ class FrisquetConfigFlow(ConfigFlow, domain=DOMAIN):
             "identifiant_chaudiere": self.data.get("identifiant_chaudiere"),
         }
 
-        # Appel API pour construire le payload final (MODELE A)
+        # Appel API pour construire le payload final 
         payload = await self.frisquet_api.getTokenAndInfo(
             entry=None,     # pas de ConfigEntry dans le flow
             data=runtime,   # runtime dict mutable
