@@ -27,11 +27,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             "La clé 'nomInstall' est manquante dans coordinator.data !")
         return
 
-    if "ecs" in coordinator.data[site]:
-        if coordinator.data[site]["ecs"]["TYPE_ECS"] is not None:
+    if "ecs" in coordinator.data:
+        if coordinator.data["ecs"]["TYPE_ECS"] is not None:
             entity = FrisquetWaterHeater(entry, coordinator, "MODE_ECS")
             async_add_entities([entity], update_before_add=False)
-        elif coordinator.data[site]["ecs"]["MODE_ECS_PAC"] is not None:
+        elif coordinator.data["ecs"]["MODE_ECS_PAC"] is not None:
             entity = FrisquetWaterHeater(entry, coordinator, "MODE_ECS_PAC")
             async_add_entities([entity], update_before_add=False)
 
@@ -39,34 +39,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 class FrisquetWaterHeater(WaterHeaterEntity, CoordinatorEntity):
     def __init__(self, config_entry: ConfigEntry, coordinator: CoordinatorEntity, idx: str) -> None:
         super().__init__(coordinator)
-        self.site = config_entry.title
+        self.site = coordinator.data.get("nomInstall", "Frisquet")
         self._attr_name = f"Chauffe-eau {self.site}"
         self.idx = idx
-        self._attr_unique_id = f"WH{coordinator.data[self.site]['zone1']['identifiant_chaudiere']}9"
+        self._attr_unique_id = f"WH{coordinator.data['zone1']['identifiant_chaudiere']}9"
         self.operation_list = self._build_operation_list(
-            coordinator.data[self.site]["modes_ecs_"])
+           coordinator.data["modes_ecs_"])
         self._attr_current_operation = self._frisquet_to_operation(
-            coordinator.data[self.site]["ecs"][idx]["id"], idx)
+           coordinator.data["ecs"][idx]["id"], idx)
         self._attr_temperature_unit = "°C"
         # NEWOOD ADD :
-        self.IDchaudiere = coordinator.data[self.site]['zone1']['identifiant_chaudiere']
-        self.token = coordinator.data[self.site]['zone1']['token']
+        self.IDchaudiere =coordinator.data['zone1']['identifiant_chaudiere']
+        self.token =coordinator.data['zone1']['token']
 
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
             identifiers={
-                (DOMAIN, self.coordinator.data[self.site]["zone1"]["identifiant_chaudiere"])},
+                (DOMAIN, self.coordinator.data["zone1"]["identifiant_chaudiere"])},
             name=self.site,
             manufacturer="Frisquet",
-            model=self.coordinator.data[self.site]["zone1"]["produit"],
-            serial_number=self.coordinator.data[self.site]["zone1"]["identifiant_chaudiere"],
+            model=self.coordinator.data["zone1"]["produit"],
+            serial_number=self.coordinator.data["zone1"]["identifiant_chaudiere"],
         )
 
     @property
     def current_operation(self):
         """Return the current operation mode."""
-        return self._frisquet_to_operation(self.coordinator.data[self.site]["ecs"][self.idx]["id"], self.idx)
+        return self._frisquet_to_operation(self.coordinator.data["ecs"][self.idx]["id"], self.idx)
 
     @property
     def supported_features(self):
@@ -85,16 +85,16 @@ class FrisquetWaterHeater(WaterHeaterEntity, CoordinatorEntity):
         try:
             _LOGGER.debug("In water heater.py _handle_coordinator_update")
             self._attr_current_operation = self._frisquet_to_operation(
-                self.coordinator.data[self.site]["ecs"][self.idx]["id"], self.idx)
-            self.token = self.coordinator.data[self.site]["zone1"]["token"]
+                self.coordinator.data["ecs"][self.idx]["id"], self.idx)
+            self.token = self.coordinator.data["zone1"]["token"]
             # NEWOOD ADD :
             self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error("Error in async_update water heater: %s", e)
 
     async def async_set_operation_mode(self, operation_mode: str) -> None:
-        mode = self.coordinator.data[self.site]["modes_ecs_"][operation_mode]
-        self.coordinator.data[self.site]["ecs"][self.idx]["id"] = mode
+        mode = self.coordinator.data["modes_ecs_"][operation_mode]
+        self.coordinator.data["ecs"][self.idx]["id"] = mode
 
         # NEWOOD ADD :
         self._attr_current_operation = operation_mode
@@ -113,7 +113,7 @@ class FrisquetWaterHeater(WaterHeaterEntity, CoordinatorEntity):
 
     async def async_turn_off(self):
         operation_mode = "Stop"
-        mode = self.coordinator.data[self.site]["modes_ecs_"][operation_mode]
+        mode = self.coordinator.data["modes_ecs_"][operation_mode]
         await self.async_set_operation_mode(operation_mode)
 
     def _build_operation_list(self, modes_ecs):
@@ -136,7 +136,7 @@ class FrisquetWaterHeater(WaterHeaterEntity, CoordinatorEntity):
         return operation_list
 
     def _frisquet_to_operation(self, id_frisquet, idx):
-        for mode_name, mode_id in self.coordinator.data[self.site]["modes_ecs_"].items():
+        for mode_name, mode_id in self.coordinator.data["modes_ecs_"].items():
             if mode_id == id_frisquet:
                 return mode_name
         return None
