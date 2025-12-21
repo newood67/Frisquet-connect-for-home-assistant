@@ -56,13 +56,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     entity = FrisquetConnectEntity(
         entry, coordinator, "zone1", coordinator.data["nomInstall"])
     entitylist.append(entity)
-    if "zone2" in coordinator.data[coordinator.data["nomInstall"]]:
+    if "zone2" in coordinator.data:
         _LOGGER.debug(
             "In Climate.py asyncsetup entry zone2 found creating a 2nd climate")
         entity2 = FrisquetConnectEntity(
             entry, coordinator, "zone2", coordinator.data["nomInstall"])
         entitylist.append(entity2)
-    if "zone3" in coordinator.data[coordinator.data["nomInstall"]]:
+    if "zone3" in coordinator.data:
         _LOGGER.debug(
             "In Climate.py asyncsetup entry zone2 found creating a 3rd climate")
         entity3 = FrisquetConnectEntity(
@@ -90,9 +90,8 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         self.idx = idx
         self.data[site] = {}
         self.data[site][idx] = {}
-        self.data[site].update(coordinator.data[site])
-        self.site = config_entry.title*
-        #Newood : not used
+        self.data[site].update(coordinator.data)
+        self.site = site
         #self.sites = config_entry.data["zone1"]["sites"]
         self.tz = coordinator.data["timezone"]
         # _LOGGER.debug("Init Entity='%s'", self.data[site][idx] )
@@ -360,7 +359,7 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
             return HVACMode.OFF
 
     def getPresetFromProgramation(self):
-        print(self.tz)
+        #Newood -- print(self.tz)
         # desired_timezone = pytz.timezone(self.tz)
         desired_timezone = ZoneInfo(self.tz)
         maintenant = datetime.now(desired_timezone)
@@ -393,22 +392,40 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         _LOGGER.debug("In websocket_confirmation with url : '%s", uri)
         try:
             async with _session.ws_connect(uri) as ws:
-                await ws.send_str(str({"type": "ORDRE_EN_ATTENTE"}))
+                await ws.send_json({"type": "ORDRE_EN_ATTENTE"})
                 _LOGGER.debug("In websocket_confirmation order sent")
                 async for msg in ws:
                     if msg.type == aiohttp.WSMsgType.TEXT:
-                        print("Message reçu :", msg.data)
+                        #Newood --print("Message reçu :", msg.data)
+                        _LOGGER.debug("Message reçu : %s", msg.data)
+                    #Newood -- change start
+                        try:
+                            data = msg.json()
+                        except Exception:
+                            _LOGGER.debug("WebSocket non JSON : %s", msg.data)
+                            continue
 
-                        if msg.data == '{"type":"ORDRE_EN_ATTENTE"}':
-                            try:
-                                pass  # await self.async_update()
-                                # self.async_write_ha_state()
+                        msg_type = data.get("type")
 
-                            except:
-                                _LOGGER.debug(
-                                    "In websocket_confirmation exception during update after ordre en attente")
+                        if msg_type == "ORDRE_OK":
+                            _LOGGER.debug("ORDRE_OK")
+                            break
+                        if msg_type == "ORDRE_EN_ATTENTE":
+                            _LOGGER.debug("ORDRE_EN_ATTENTE")
+                            continue
+                    #Newood -- change end
+                        #if msg.data == '{"type":"ORDRE_EN_ATTENTE"}':
+                        #    try:
+                        #       pass  # await self.async_update()
+                        #        # self.async_write_ha_state()
 
-                    elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR, "ORDRE_OK"):
+                        #     except:
+                        #         _LOGGER.debug(
+                        #             "In websocket_confirmation exception during update after ordre en attente")
+
+                    elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
+                        #Newood Add:
+                        _LOGGER.debug("WebSocket closed/error")
                         break
         except Exception as e:
             _LOGGER.error("Erreur dans websocket_confirmation : %s", e)
