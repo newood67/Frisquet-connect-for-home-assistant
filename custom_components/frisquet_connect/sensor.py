@@ -25,7 +25,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     _LOGGER.debug("Sensors setup_entry")
     coordinator = hass.data[DOMAIN][entry.entry_id]  # Utilise entry.entry_id
 
-    _LOGGER.debug("In SENSOR.py asyncsetup entry2 %s'", coordinator.data)
+    # %s'", coordinator.data)
+    _LOGGER.debug("In SENSOR.py async setup entry2 ")
     entitylist = []
     if "zone1" in coordinator.data and "energy" in coordinator.data["zone1"]:
         if "CHF" in coordinator.data["zone1"]["energy"]:
@@ -97,8 +98,8 @@ class ConsoSAN(SensorEntity, CoordinatorEntity):
     def icon(self) -> str | None:
         return "mdi:gas-burner"
 
-    #@property
-    #def should_poll(self) -> bool:
+    # @property
+    # def should_poll(self) -> bool:
     #    """Poll for those entities"""
     #    return True
 
@@ -303,7 +304,8 @@ class FrisquetThermometerExt(SensorEntity, CoordinatorEntity):
             identifiers={
                 # Serial numbers are unique identifiers within a specific domain
                 # self.unique_id)
-                (DOMAIN, self.coordinator.data[self.idx]["identifiant_chaudiere"])
+                (DOMAIN, self.coordinator.data[self.idx]
+                 ["identifiant_chaudiere"])
             },
             name=self.coordinator.data["nomInstall"],  # self.name
             manufacturer="Frisquet",
