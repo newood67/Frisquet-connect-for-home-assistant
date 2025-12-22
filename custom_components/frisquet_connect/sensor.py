@@ -90,17 +90,17 @@ class ConsoSAN(SensorEntity, CoordinatorEntity):
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
         self._attr_native_value = coordinator.data[idx]["energy"]["SAN"]
 
-        self.data[idx] = {}
-        self.data[idx].update(coordinator.data[idx])
+        self.idx = idx
+        self.coordinator = coordinator
 
     @property
     def icon(self) -> str | None:
         return "mdi:gas-burner"
 
-    @property
-    def should_poll(self) -> bool:
-        """Poll for those entities"""
-        return True
+    #@property
+    #def should_poll(self) -> bool:
+    #    """Poll for those entities"""
+    #    return True
 
     @property
     def device_class(self) -> SensorDeviceClass | None:
@@ -132,6 +132,7 @@ class ConsoSAN(SensorEntity, CoordinatorEntity):
             _LOGGER.debug(
                 "In sensor.py SAN _handle_coordinator_update %s", self)
             self._attr_native_value = self.coordinator.data[self.idx]["energy"]["SAN"]
+            self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error("Error in async_update SAN sensor: %s", e)
 
@@ -154,8 +155,8 @@ class ConsoCHF(SensorEntity, CoordinatorEntity):
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
         self._attr_native_value = coordinator.data[idx]["energy"]["CHF"]
 
-        self.data[idx] = {}
-        self.data[idx].update(coordinator.data[idx])
+        self.idx = idx
+        self.coordinator = coordinator
 
     @property
     def icon(self) -> str | None:
@@ -199,6 +200,7 @@ class ConsoCHF(SensorEntity, CoordinatorEntity):
                 "In sensor.py CHF _handle_coordinator_update %s", self)
             if self.unique_id == "CHF"+self.IDChaudiere + str(9):
                 self._attr_native_value = self.coordinator.data[self.idx]["energy"]["CHF"]
+                self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error("Error in async_update CHF sensor: %s", e)
 
@@ -226,8 +228,8 @@ class FrisquetAlert(SensorEntity, CoordinatorEntity):
         # self._attr_native_unit_of_measurement = "°C"
         # self._attr_unit_of_measurement = "°C"
 
-        self.data[idx] = {}
-        self.data[idx].update(coordinator.data[idx])
+        self.idx = idx
+        self.coordinator = coordinator
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -265,6 +267,7 @@ class FrisquetAlert(SensorEntity, CoordinatorEntity):
                     self._attr_native_value = self.coordinator.data["alarmes"][0]["nom"]
                 else:
                     self._attr_native_value = "Aucune alerte en cours"
+            self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error("Error in async_update Alert sensor: %s", e)
 
@@ -289,8 +292,8 @@ class FrisquetThermometerExt(SensorEntity, CoordinatorEntity):
         self._attr_native_unit_of_measurement = "°C"
         self._attr_unit_of_measurement = "°C"
 
-        self.data[idx] = {}
-        self.data[idx].update(coordinator.data[idx])
+        self.idx = idx
+        self.coordinator = coordinator
         _LOGGER.debug("Thermometer init state : %s", self._attr_native_value)
 
     @property
@@ -333,6 +336,7 @@ class FrisquetThermometerExt(SensorEntity, CoordinatorEntity):
                 "In sensor.py Ext _handle_coordinator_update %s", self)
             if self._attr_unique_id == "T" + str(self.IDChaudiere) + str(9):
                 self._attr_native_value = self.coordinator.data[self.idx]["T_EXT"] / 10
+                self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error("Error updating Thermometer Ext sensor: %s", e)
 
@@ -358,8 +362,8 @@ class FrisquetThermometer(SensorEntity, CoordinatorEntity):
         self._attr_has_entity_name = True
         self._attr_native_unit_of_measurement = "°C"
         self._attr_unit_of_measurement = "°C"
-        self.data[idx] = {}
-        self.data[idx].update(coordinator.data[idx])
+        self.idx = idx
+        self.coordinator = coordinator
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -402,5 +406,6 @@ class FrisquetThermometer(SensorEntity, CoordinatorEntity):
                 "In sensor.py Thermometer _handle_coordinator_update %s", self)
             if self._attr_unique_id == "T" + str(self.IDchaudiere) + str(self.numeroZone):
                 self._attr_native_value = self.coordinator.data[self.idx]["TAMB"] / 10
+                self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error("Error updating Thermometer sensor: %s", e)
