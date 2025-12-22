@@ -27,26 +27,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     _LOGGER.debug("In SENSOR.py asyncsetup entry2 %s'", coordinator.data)
     entitylist = []
-    if "energy" in coordinator.data[coordinator.data["nomInstall"]]["zone1"].keys():
-        if "CHF" in coordinator.data[coordinator.data["nomInstall"]]["zone1"]["energy"].keys():
+    if "zone1" in coordinator.data and "energy" in coordinator.data["zone1"]:
+        if "CHF" in coordinator.data["zone1"]["energy"]:
             entityC = ConsoCHF(entry, coordinator, "zone1")
             entitylist.append(entityC)
-        if "SAN" in coordinator.data[coordinator.data["nomInstall"]]["zone1"]["energy"].keys():
+        if "SAN" in coordinator.data["zone1"]["energy"]:
             entityS = ConsoSAN(entry, coordinator, "zone1")
             entitylist.append(entityS)
     entity = FrisquetThermometer(entry, coordinator, "zone1")
     entitylist.append(entity)
-    if "zone2" in coordinator.data[coordinator.data["nomInstall"]]:
+    if "zone2" in coordinator.data:
         _LOGGER.debug(
             "In sensor.py asyncsetup entry zone2 found creating a 2nd sensor")
         entity2 = FrisquetThermometer(entry, coordinator, "zone2")
         entitylist.append(entity2)
-    if "zone3" in coordinator.data[coordinator.data["nomInstall"]]:
+    if "zone3" in coordinator.data:
         _LOGGER.debug(
             "In sensor.py asyncsetup entry zone3 found creating a 3rd sensor")
         entity5 = FrisquetThermometer(entry, coordinator, "zone3")
         entitylist.append(entity5)
-    if coordinator.data[coordinator.data["nomInstall"]]["zone1"]["T_EXT"] is not None:
+    if coordinator.data.get("zone1", {}).get("T_EXT") is not None:
         _LOGGER.debug(
             "In sensor.py asyncsetup entry T_EXT found creating a Ext. sensor")
         entity3 = FrisquetThermometerExt(entry, coordinator, "zone1")
@@ -79,9 +79,8 @@ class ConsoSAN(SensorEntity, CoordinatorEntity):
             "ConsoEnergy Sensor SAN INIT Coordinator : %s", coordinator)
         super().__init__(coordinator)
         self.idx = idx
-        site = config_entry.title
-        self.site = site
-        self.IDChaudiere = coordinator.data[site][idx]["identifiant_chaudiere"]
+        self.site = None
+        self.IDChaudiere = coordinator.data[idx]["identifiant_chaudiere"]
         self._attr_unique_id = "SAN"+self.IDChaudiere + str(9)
         self._attr_name = "Consommation Eau Chaude"
 
@@ -89,19 +88,19 @@ class ConsoSAN(SensorEntity, CoordinatorEntity):
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_unit_of_measurement = "kWh"
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
-        self._attr_native_value = coordinator.data[site][idx]["energy"]["SAN"]
+        self._attr_native_value = coordinator.data[idx]["energy"]["SAN"]
 
-        self.data[idx] = {}
-        self.data[idx].update(coordinator.data[site][idx])
+        self.idx = idx
+        self.coordinator = coordinator
 
     @property
     def icon(self) -> str | None:
         return "mdi:gas-burner"
 
-    @property
-    def should_poll(self) -> bool:
-        """Poll for those entities"""
-        return True
+    #@property
+    #def should_poll(self) -> bool:
+    #    """Poll for those entities"""
+    #    return True
 
     @property
     def device_class(self) -> SensorDeviceClass | None:
@@ -118,13 +117,13 @@ class ConsoSAN(SensorEntity, CoordinatorEntity):
             identifiers={
                 # Serial numbers are unique identifiers within a specific domain
                 # self.unique_id)
-                (DOMAIN, self.coordinator.data[self.site]
+                (DOMAIN, self.coordinator.data
                  [self.idx]["identifiant_chaudiere"])
             },
             name=self.site,  # self.name
             manufacturer="Frisquet",
-            model=self.coordinator.data[self.site][self.idx]["produit"],
-            serial_number=self.coordinator.data[self.site][self.idx]["identifiant_chaudiere"],
+            model=self.coordinator.data[self.idx]["produit"],
+            serial_number=self.coordinator.data[self.idx]["identifiant_chaudiere"],
         )
 
     @callback
@@ -132,7 +131,8 @@ class ConsoSAN(SensorEntity, CoordinatorEntity):
         try:
             _LOGGER.debug(
                 "In sensor.py SAN _handle_coordinator_update %s", self)
-            self._attr_native_value = self.coordinator.data[self.site][self.idx]["energy"]["SAN"]
+            self._attr_native_value = self.coordinator.data[self.idx]["energy"]["SAN"]
+            self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error("Error in async_update SAN sensor: %s", e)
 
@@ -145,19 +145,18 @@ class ConsoCHF(SensorEntity, CoordinatorEntity):
         _LOGGER.debug("ConsoEnergy Sensor INIT Coordinator : %s", coordinator)
         super().__init__(coordinator)
         self.idx = idx
-        site = config_entry.title
-        self.site = site
-        self.IDChaudiere = coordinator.data[site][idx]["identifiant_chaudiere"]
+        self.site = None
+        self.IDChaudiere = coordinator.data[idx]["identifiant_chaudiere"]
         self._attr_unique_id = "CHF"+self.IDChaudiere + str(9)
         self._attr_name = "Consommation Chauffage"
         self._attr_has_entity_name = True
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_unit_of_measurement = "kWh"
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
-        self._attr_native_value = coordinator.data[site][idx]["energy"]["CHF"]
+        self._attr_native_value = coordinator.data[idx]["energy"]["CHF"]
 
-        self.data[idx] = {}
-        self.data[idx].update(coordinator.data[site][idx])
+        self.idx = idx
+        self.coordinator = coordinator
 
     @property
     def icon(self) -> str | None:
@@ -183,14 +182,14 @@ class ConsoCHF(SensorEntity, CoordinatorEntity):
             identifiers={
                 # Serial numbers are unique identifiers within a specific domain
                 # self.unique_id)
-                (DOMAIN, self.coordinator.data[self.site]
+                (DOMAIN, self.coordinator.data
                  [self.idx]["identifiant_chaudiere"])
             },
 
             name=self.site,  # self.name
             manufacturer="Frisquet",
-            model=self.coordinator.data[self.site][self.idx]["produit"],
-            serial_number=self.coordinator.data[self.site][self.idx]["identifiant_chaudiere"],
+            model=self.coordinator.data[self.idx]["produit"],
+            serial_number=self.coordinator.data[self.idx]["identifiant_chaudiere"],
         )
 
     @callback
@@ -200,7 +199,8 @@ class ConsoCHF(SensorEntity, CoordinatorEntity):
             _LOGGER.debug(
                 "In sensor.py CHF _handle_coordinator_update %s", self)
             if self.unique_id == "CHF"+self.IDChaudiere + str(9):
-                self._attr_native_value = self.coordinator.data[self.site][self.idx]["energy"]["CHF"]
+                self._attr_native_value = self.coordinator.data[self.idx]["energy"]["CHF"]
+                self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error("Error in async_update CHF sensor: %s", e)
 
@@ -214,15 +214,13 @@ class FrisquetAlert(SensorEntity, CoordinatorEntity):
         _LOGGER.debug("Sensors Alert Coordinator : %s", coordinator)
         super().__init__(coordinator)
         self.idx = idx
-        site = config_entry.title
-        self.site = site
-        self.site = site
-        self.IDChaudiere = coordinator.data[site][idx]["identifiant_chaudiere"]
+        self.site = coordinator.data.get("nomInstall")
+        self.IDChaudiere = coordinator.data[idx]["identifiant_chaudiere"]
         self._attr_unique_id = "A"+self.IDChaudiere + str(9)
 
         self._attr_name = "Alerte"
-        if coordinator.data[site]["alarmes"]:
-            self._attr_native_value = coordinator.data[site]["alarmes"][0]["nom"]
+        if coordinator.data["alarmes"]:
+            self._attr_native_value = coordinator.data["alarmes"][0]["nom"]
         else:
             self._attr_native_value = "Aucune alerte en cours"
 
@@ -230,8 +228,8 @@ class FrisquetAlert(SensorEntity, CoordinatorEntity):
         # self._attr_native_unit_of_measurement = "°C"
         # self._attr_unit_of_measurement = "°C"
 
-        self.data[idx] = {}
-        self.data[idx].update(coordinator.data[site][idx])
+        self.idx = idx
+        self.coordinator = coordinator
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -240,13 +238,13 @@ class FrisquetAlert(SensorEntity, CoordinatorEntity):
             identifiers={
                 # Serial numbers are unique identifiers within a specific domain
                 # self.unique_id)
-                (DOMAIN, self.coordinator.data[self.site]
+                (DOMAIN, self.coordinator.data
                  [self.idx]["identifiant_chaudiere"])
             },
             name=self.coordinator.data["nomInstall"],  # self.name
             manufacturer="Frisquet",
-            model=self.coordinator.data[self.site][self.idx]["produit"],
-            serial_number=self.coordinator.data[self.site][self.idx]["identifiant_chaudiere"],
+            model=self.coordinator.data[self.idx]["produit"],
+            serial_number=self.coordinator.data[self.idx]["identifiant_chaudiere"],
         )
 
     @property
@@ -265,10 +263,11 @@ class FrisquetAlert(SensorEntity, CoordinatorEntity):
             _LOGGER.debug(
                 "In sensor.py Alert _handle_coordinator_update %s", self)
             if self._attr_unique_id == "A"+self.IDChaudiere + str(9):
-                if self.coordinator.data[self.site]["alarmes"]:
-                    self._attr_native_value = self.coordinator.data[self.site]["alarmes"][0]["nom"]
+                if self.coordinator.data["alarmes"]:
+                    self._attr_native_value = self.coordinator.data["alarmes"][0]["nom"]
                 else:
                     self._attr_native_value = "Aucune alerte en cours"
+            self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error("Error in async_update Alert sensor: %s", e)
 
@@ -282,21 +281,19 @@ class FrisquetThermometerExt(SensorEntity, CoordinatorEntity):
         _LOGGER.debug("Sensors INIT Coordinator : %s", coordinator)
         super().__init__(coordinator)
         self.idx = idx
-        site = config_entry.title
-        self.site = site
-        self.site = site
-        self.IDChaudiere = coordinator.data[site][idx]["identifiant_chaudiere"]
+        self.site = coordinator.data.get("nomInstall", "Frisquet")
+        self.IDChaudiere = coordinator.data[idx]["identifiant_chaudiere"]
         self._attr_unique_id = "T"+self.IDChaudiere + str(9)
 
         self._attr_name = "Temperature extérieure"
-        self._attr_native_value = coordinator.data[site][idx]["T_EXT"]/10
+        self._attr_native_value = coordinator.data[idx]["T_EXT"]/10
 
         self._attr_has_entity_name = True
         self._attr_native_unit_of_measurement = "°C"
         self._attr_unit_of_measurement = "°C"
 
-        self.data[idx] = {}
-        self.data[idx].update(coordinator.data[site][idx])
+        self.idx = idx
+        self.coordinator = coordinator
         _LOGGER.debug("Thermometer init state : %s", self._attr_native_value)
 
     @property
@@ -306,13 +303,12 @@ class FrisquetThermometerExt(SensorEntity, CoordinatorEntity):
             identifiers={
                 # Serial numbers are unique identifiers within a specific domain
                 # self.unique_id)
-                (DOMAIN, self.coordinator.data[self.site]
-                 [self.idx]["identifiant_chaudiere"])
+                (DOMAIN, self.coordinator.data[self.idx]["identifiant_chaudiere"])
             },
             name=self.coordinator.data["nomInstall"],  # self.name
             manufacturer="Frisquet",
-            model=self.coordinator.data[self.site][self.idx]["produit"],
-            serial_number=self.coordinator.data[self.site][self.idx]["identifiant_chaudiere"],
+            model=self.coordinator.data[self.idx]["produit"],
+            serial_number=self.coordinator.data[self.idx]["identifiant_chaudiere"],
         )
 
     @property
@@ -339,7 +335,8 @@ class FrisquetThermometerExt(SensorEntity, CoordinatorEntity):
             _LOGGER.debug(
                 "In sensor.py Ext _handle_coordinator_update %s", self)
             if self._attr_unique_id == "T" + str(self.IDChaudiere) + str(9):
-                self._attr_native_value = self.coordinator.data[self.site][self.idx]["T_EXT"] / 10
+                self._attr_native_value = self.coordinator.data[self.idx]["T_EXT"] / 10
+                self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error("Error updating Thermometer Ext sensor: %s", e)
 
@@ -353,22 +350,20 @@ class FrisquetThermometer(SensorEntity, CoordinatorEntity):
         _LOGGER.debug("Sensors INIT Coordinator : %s", coordinator)
         super().__init__(coordinator)
         self.idx = idx
-        site = config_entry.title
-        self.site = site  # coordinator.data["nomInstall"]
-        self.site = site
-        self.numeroZone = self.coordinator.data[self.site][self.idx]["numero"]
-        self.IDchaudiere = coordinator.data[site][idx]["identifiant_chaudiere"]
+        self.site = None
+        self.numeroZone = self.coordinator.data[self.idx]["numero"]
+        self.IDchaudiere = coordinator.data[idx]["identifiant_chaudiere"]
         self._attr_unique_id = "T" + \
             str(self.IDchaudiere) + str(self.numeroZone)
         self._attr_has_entity_name = False
         self._attr_name = "Temperature " + \
-            coordinator.data[site][idx]["nom"]  # + " " + idx
-        self._attr_native_value = coordinator.data[site][idx]["TAMB"]/10
+            coordinator.data[idx]["nom"]  # + " " + idx
+        self._attr_native_value = coordinator.data[idx]["TAMB"]/10
         self._attr_has_entity_name = True
         self._attr_native_unit_of_measurement = "°C"
         self._attr_unit_of_measurement = "°C"
-        self.data[idx] = {}
-        self.data[idx].update(coordinator.data[site][idx])
+        self.idx = idx
+        self.coordinator = coordinator
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -377,13 +372,13 @@ class FrisquetThermometer(SensorEntity, CoordinatorEntity):
             identifiers={
                 # Serial numbers are unique identifiers within a specific domain
                 # self.unique_id)
-                (DOMAIN, self.coordinator.data[self.site]
+                (DOMAIN, self.coordinator.data
                  [self.idx]["identifiant_chaudiere"])
             },
             name=self.site,  # self.name
             manufacturer="Frisquet",
-            model=self.coordinator.data[self.site][self.idx]["produit"],
-            serial_number=self.coordinator.data[self.site][self.idx]["identifiant_chaudiere"],
+            model=self.coordinator.data[self.idx]["produit"],
+            serial_number=self.coordinator.data[self.idx]["identifiant_chaudiere"],
         )
 
     @property
@@ -410,6 +405,7 @@ class FrisquetThermometer(SensorEntity, CoordinatorEntity):
             _LOGGER.debug(
                 "In sensor.py Thermometer _handle_coordinator_update %s", self)
             if self._attr_unique_id == "T" + str(self.IDchaudiere) + str(self.numeroZone):
-                self._attr_native_value = self.coordinator.data[self.site][self.idx]["TAMB"] / 10
+                self._attr_native_value = self.coordinator.data[self.idx]["TAMB"] / 10
+                self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error("Error updating Thermometer sensor: %s", e)

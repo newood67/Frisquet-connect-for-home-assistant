@@ -2,7 +2,7 @@
 import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from datetime import timedelta
 from .const import (
     DOMAIN,
@@ -24,10 +24,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     my_api = FrisquetGetInfo(hass, entry.data)
 
     async def async_update_data():
-        """Mise à jour des données via l'API."""
-        #entry.data["zone1"] newood
-        await my_api.getTokenAndInfo(entry, entry.data, 0, entry.data.get("SiteID", 0))
-        return my_api.data
+        try:
+            data = await my_api.getTokenAndInfo(
+                entry, {}, 0, entry.data.get("SiteID", 0)
+            )
+
+            if not data or "nomInstall" not in data:
+                raise UpdateFailed("Données Frisquet invalides")
+
+            return data
+
+        except asyncio.CancelledError:
+            _LOGGER.warning("Update Frisquet annulée (reload / arrêt HA)")
+            raise
+
+        except Exception as err:
+            raise UpdateFailed(f"Erreur Frisquet API: {err}") from err
 
     coordinator = DataUpdateCoordinator(
         hass,
@@ -57,8 +69,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
-        if DOMAIN in hass.data and entry.unique_id in hass.data[DOMAIN]:
-            hass.data[DOMAIN].pop(entry.unique_id)
+        if DOMAIN in hass.data and entry.entry_id  in hass.data[DOMAIN]:
+            hass.data[DOMAIN].pop(entry.entry_id )
             _LOGGER.debug(
                 "Données de l'entrée {entry.entry_id} supprimées de hass.data[{DOMAIN}]")
         else:
