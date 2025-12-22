@@ -156,6 +156,7 @@ class FrisquetGetInfo:
                 "nomInstall") or f"site_{site}"
 
             # --- MODELE A : data plat ---
+
             # On écrit toujours dans self.data (cache interne) ET on copie dans data (objet retourné)
             self.data["Lastcall"] = datetime.datetime.now()
             self.data["nomInstall"] = site_name
