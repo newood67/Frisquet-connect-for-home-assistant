@@ -62,8 +62,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
-        if DOMAIN in hass.data and entry.unique_id in hass.data[DOMAIN]:
-            hass.data[DOMAIN].pop(entry.unique_id)
+        if DOMAIN in hass.data and entry.entry_id  in hass.data[DOMAIN]:
+            hass.data[DOMAIN].pop(entry.entry_id )
             _LOGGER.debug(
                 "Données de l'entrée {entry.entry_id} supprimées de hass.data[{DOMAIN}]")
         else:
