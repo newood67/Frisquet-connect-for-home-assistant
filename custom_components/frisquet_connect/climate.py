@@ -32,6 +32,8 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
 )
 
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
 from datetime import datetime
 import time
 
@@ -86,6 +88,7 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         """Initisalisation de notre entité"""
         # _LOGGER.debug("Climate INIT Coordinator : %s", coordinator)
         super().__init__(coordinator)
+        self.hass = coordinator.hass
 
         self.idx = idx
         self.site = site
@@ -379,7 +382,7 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
                 pass
 
     async def websocket_confirmation(self):
-        _session = aiohttp.ClientSession()
+        _session = async_get_clientsession(self.hass)
 
         uri = WS_API+"?token="+self.token+"&identifiant_chaudiere=" + \
             self.IDchaudiere  # Remplacez par l'URI de votre WebSocket
@@ -423,9 +426,7 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
                         break
         except Exception as e:
             _LOGGER.error("Erreur dans websocket_confirmation : %s", e)
-        finally:
-            await _session.close()
-            _LOGGER.debug("Session WebSocket fermée")
+
 
     async def OrderToFrisquestAPI(self, key, valeur):
         if key == "MODE_ECS":
