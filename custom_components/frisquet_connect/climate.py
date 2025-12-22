@@ -88,51 +88,50 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         super().__init__(coordinator)
 
         self.idx = idx
-        self.data[site] = {}
-        self.data[site][idx] = {}
-        self.data[site].update(coordinator.data)
         self.site = site
+        self.coordinator = coordinator
         #self.sites = config_entry.data["zone1"]["sites"]
         self.tz = coordinator.data["timezone"]
-        # _LOGGER.debug("Init Entity='%s'", self.data[site][idx] )
+        # _LOGGER.debug("Init Entity='%s'", self.coordinator.data[self.idx] )
         self._attr_unique_id = str(
-            self.data[site][idx]["identifiant_chaudiere"]) + str(self.data[site][idx]["numero"])
+            self.coordinator.data[self.idx]["identifiant_chaudiere"]) + str(self.coordinator.data[self.idx]["numero"])
         self._attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
         self._attr_has_entity_name = False
-        if self.data[site][idx]["nom"] == self.data[site]["nomInstall"]:
-            self._attr_name = self.data[site][idx]["nom"]
+        site_name = self.coordinator.data["nomInstall"]
+
+        if self.coordinator.data[self.idx]["nom"] == site_name:
+            self._attr_name = self.coordinator.data[self.idx]["nom"]
         else:
-            self._attr_name = self.data[site]["nomInstall"] + \
-                " " + self.data[site][idx]["nom"]
+            self._attr_name = f"{site_name} {self.coordinator.data[self.idx]['nom']}"
         self._attr_temperature_unit = "°C"
         self._attr_target_temperature_low = 5
         self._attr_target_temperature_high = 25
         self._attr_hvac_modes = [HVACMode.HEAT, HVACMode.AUTO, HVACMode.OFF]
         self._attr_preset_modes = self.DefineavAilablePresetmodes(
-            self.data[site][idx]["boost_disponible"])
+            self.coordinator.data[self.idx]["boost_disponible"])
         self._attr_translation_key = "frisquet_connect"
 
-        self.IDchaudiere = str(self.data[site][idx]["identifiant_chaudiere"])
-        self.zoneNR: str = self.data[site][idx]["numero"]
-        self.token = self.data[site][idx]["token"]
-        self.Devicename = self.data[site][idx]["produit"]
+        self.IDchaudiere = str(self.coordinator.data[self.idx]["identifiant_chaudiere"])
+        self.zoneNR: str = self.coordinator.data[self.idx]["numero"]
+        self.token = self.coordinator.data[self.idx]["token"]
+        self.Devicename = self.coordinator.data[self.idx]["produit"]
 
-        self.Mode = self.data[site][idx]["MODE"]
+        self.Mode = self.coordinator.data[self.idx]["MODE"]
         # 5 Auto, 6 Permanent
-        self.Selecteur = self.data[site][idx]["SELECTEUR"]
-        self.Derogation = self.data[site][idx]["DERO"]
+        self.Selecteur = self.coordinator.data[self.idx]["SELECTEUR"]
+        self.Derogation = self.coordinator.data[self.idx]["DERO"]
         self.TimeLastOrder = time.time()
-        self._attr_current_temperature = self.data[site][idx]["TAMB"] / 10
+        self._attr_current_temperature = self.coordinator.data[self.idx]["TAMB"] / 10
 
         self._attr_preset_mode = self.defPreset(
-            self.Selecteur, self.Mode, self.data[site][idx]["ACTIVITE_BOOST"], self.Derogation)
+            self.Selecteur, self.Mode, self.coordinator.data[self.idx]["ACTIVITE_BOOST"], self.Derogation)
         # _LOGGER.debug("Init climate  preset: %s",self._attr_preset_mode)
 
         self._attr_hvac_mode = self.modeFrisquetToHVAC(
-            self.Mode, self.Derogation, self._attr_preset_mode, self.data[site][idx]["CAMB"] / 10, self.data[site][idx]["TAMB"] / 10)
+            self.Mode, self.Derogation, self._attr_preset_mode, self.coordinator.data[self.idx]["CAMB"] / 10, self.coordinator.data[self.idx]["TAMB"] / 10)
         # _LOGGER.debug("Init climate  hvac_mode: %s",self._attr_hvac_mode)
         self._attr_target_temperature = self.defConsigneTemp(
-            self._attr_preset_mode, self.data[site][idx]["CONS_CONF"] / 10, self.data[site][idx]["CONS_RED"] / 10, self.data[site][idx]["CONS_HG"] / 10)
+            self._attr_preset_mode, self.coordinator.data[self.idx]["CONS_CONF"] / 10, self.coordinator.data[self.idx]["CONS_RED"] / 10, self.coordinator.data[self.idx]["CONS_HG"] / 10)
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -140,60 +139,55 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         return DeviceInfo(
             identifiers={
                 # Serial numbers are unique identifiers within a specific domain
-                (DOMAIN, self.data[self.site]
-                 [self.idx]["identifiant_chaudiere"])
+                (DOMAIN, self.coordinator.data[self.idx]["identifiant_chaudiere"])
             },
-            name=self._attr_name,  # self.data[self.site][self.idx]["nom"],
+            name=self._attr_name,  # self.coordinator.data[self.idx]["nom"],
             manufacturer="Frisquet",
-            model=self.data[self.site][self.idx]["produit"],
-            serial_number=self.data[self.site][self.idx]["identifiant_chaudiere"],
+            model=self.coordinator.data[self.idx]["produit"],
+            serial_number=self.coordinator.data[self.idx]["identifiant_chaudiere"],
         )
 
     @property
     def icon(self) -> str | None:
         return "mdi:home-thermometer-outline"
 
-    @property
-    def should_poll(self) -> bool:
-        """Poll for those entities"""
-        return True
+    # @property
+    #def should_poll(self) -> bool:
+    #    """Poll for those entities"""
+    #    return True
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        _LOGGER.debug("Climate.py _handle_coordinator_update")
-        try:
+        data = self.coordinator.data[self.idx]
 
-            site = self.site  # self.coordinator["nomInstall"]
-            self.data[site][self.idx] = self.coordinator.data[site][self.idx]
-            self.data[site]["ecs"] = self.data[site]["ecs"]
-            _LOGGER.debug("In Climate.py async self.data UPDATED")
-        except:
-            self.data[site][self.idx]["date_derniere_remontee"] = 0
-            _LOGGER.debug("In Climate.py async exception reached")
+        self._attr_current_temperature = data["TAMB"] / 10
+        self.Derogation = data["DERO"]
+        self.token = data["token"]
 
-        try:
-            if float(self.data[site][self.idx]["date_derniere_remontee"]) > float(self.TimeLastOrder):
-                if self.device_info["serial_number"] == self.IDchaudiere:
-                    _LOGGER.debug(
-                        "In Climate.py async update in progress %s", self.site)
-                    site = self.site
-                    self._attr_current_temperature = self.data[site][self.idx]["TAMB"] / 10
-                    self.Derogation = self.data[site][self.idx]["DERO"]
-                    self.token = self.data[site][self.idx]["token"]
-                    self._attr_preset_mode = self.defPreset(self.data[site][self.idx]["SELECTEUR"], self.data[site]
-                                                            [self.idx]["MODE"], self.data[site][self.idx]["ACTIVITE_BOOST"], self.data[site][self.idx]["DERO"])
-                    self._attr_hvac_mode = self.modeFrisquetToHVAC(self.data[site][self.idx]["MODE"], self.data[site][self.idx]["DERO"],
-                                                                   self._attr_preset_mode, self.data[site][self.idx]["CAMB"] / 10, self.data[site][self.idx]["TAMB"] / 10)
-                    self.async_write_ha_state()
-                    self._attr_target_temperature = self.defConsigneTemp(
-                        self._attr_preset_mode, self.data[site][self.idx]["CONS_CONF"] / 10, self.data[site][self.idx]["CONS_RED"] / 10, self.data[site][self.idx]["CONS_HG"] / 10)
+        self._attr_preset_mode = self.defPreset(
+            data["SELECTEUR"],
+            data["MODE"],
+            data["ACTIVITE_BOOST"],
+            data["DERO"],
+        )
 
-            else:
-                _LOGGER.debug("In Climate.py async update No Update")
-        except:
-            _LOGGER.debug("In Climate.py async update Exception No Update")
-        # pass
+        self._attr_hvac_mode = self.modeFrisquetToHVAC(
+            data["MODE"],
+            data["DERO"],
+            self._attr_preset_mode,
+            data["CAMB"] / 10,
+            data["TAMB"] / 10,
+        )
+
+        self._attr_target_temperature = self.defConsigneTemp(
+            self._attr_preset_mode,
+            data["CONS_CONF"] / 10,
+            data["CONS_RED"] / 10,
+            data["CONS_HG"] / 10,
+        )
+
+        self.async_write_ha_state()
+
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Set new target hvac mode."""
@@ -201,24 +195,24 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         # _LOGGER.debug("In async_set_hvac_mode  current mode: '%s",self.hvac_mode)
         if hvac_mode == "auto" and (self._attr_preset_mode == "hors_gel" or self._attr_preset_mode == "reduit_permanent" or self._attr_preset_mode == "confort_permanent"):
             _key = "SELECTEUR_Z" + \
-                str(self.data[self.site][self.idx]["numero"])
+                str(self.coordinator.data[self.idx]["numero"])
             mode = 5
             await self.OrderToFrisquestAPI(_key, mode)
             # self.defPreset(self.data[self.idx]["SELECTEUR"], 5,self.data[self.idx]["ACTIVITE_BOOST"],False )
             self._attr_preset_mode = self.getPresetFromProgramation()
             self._attr_target_temperature = self.defConsigneTemp(
-                self._attr_preset_mode, self.data[self.site][self.idx]["CONS_CONF"] / 10, self.data[self.site][self.idx]["CONS_RED"] / 10, self.data[self.site][self.idx]["CONS_HG"] / 10)
+                self._attr_preset_mode, self.coordinator.data[self.idx]["CONS_CONF"] / 10, self.coordinator.data[self.idx]["CONS_RED"] / 10, self.coordinator.data[self.idx]["CONS_HG"] / 10)
             self.hvac_mode = "auto"
 
-        elif hvac_mode == "auto" and (int(self.data[self.site][self.idx]["SELECTEUR"]) != 5 or self.data[self.site][self.idx]["DERO"] == True):
+        elif hvac_mode == "auto" and (int(self.coordinator.data[self.idx]["SELECTEUR"]) != 5 or self.coordinator.data[self.idx]["DERO"] == True):
             _key = "MODE_DERO"
             mode = 0  # 5 #Auto
             await self.OrderToFrisquestAPI(_key, mode)
             self._attr_preset_mode = self.getPresetFromProgramation()
             self._attr_target_temperature = self.defConsigneTemp(self.getPresetFromProgramation(
-            ), self.data[self.site][self.idx]["CONS_CONF"] / 10, self.data[self.site][self.idx]["CONS_RED"] / 10, self.data[self.site][self.idx]["CONS_HG"] / 10)
+            ), self.coordinator.data[self.idx]["CONS_CONF"] / 10, self.coordinator.data[self.idx]["CONS_RED"] / 10, self.coordinator.data[self.idx]["CONS_HG"] / 10)
             self.hvac_mode = "auto"
-        elif hvac_mode == "auto" or self.data[self.site][self.idx]["SELECTEUR"] + 5:
+        elif hvac_mode == "auto" or self.coordinator.data[self.idx]["SELECTEUR"] + 5:
             self.hvac_mode = "auto"
         else:
             pass
@@ -226,12 +220,12 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
     async def async_set_temperature(self, **kwargs):
         _LOGGER.debug("In Async Set TEmp: '%s", kwargs["temperature"])
         if self._attr_preset_mode == PRESET_COMFORT or self._attr_preset_mode == "confort_permanent":
-            _key = "CONS_CONF_Z"+str(self.data[self.site][self.idx]["numero"])
+            _key = "CONS_CONF_Z"+str(self.coordinator.data[self.idx]["numero"])
             _LOGGER.debug("Key confort : %s", _key)
         elif self._attr_preset_mode == "reduit" or self._attr_preset_mode == "reduit_permanent":
-            _key = "CONS_RED_Z"+str(self.data[self.site][self.idx]["numero"])
+            _key = "CONS_RED_Z"+str(self.coordinator.data[self.idx]["numero"])
         elif self._attr_preset_mode == "hors_gel":
-            _key = "CONS_HG_Z"+str(self.data[self.site][self.idx]["numero"])
+            _key = "CONS_HG_Z"+str(self.coordinator.data[self.idx]["numero"])
         else:
             pass
 
@@ -244,54 +238,54 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         _LOGGER.debug("async_set_preset_mode requested: %s", preset_mode)
         _LOGGER.debug("async_set_preset_mode current %s",
                       self._attr_preset_mode)
-        if self.data[self.site][self.idx]["SELECTEUR"] != 5:  # on repasse en auto
+        if self.coordinator.data[self.idx]["SELECTEUR"] != 5:  # on repasse en auto
             mode = int(5)
-            _key = "SELECTEUR_Z"+str(self.data[self.site][self.idx]["numero"])
+            _key = "SELECTEUR_Z"+str(self.coordinator.data[self.idx]["numero"])
             await self.OrderToFrisquestAPI(_key, mode)
 
         # on desactive le boost
-        if self.data[self.site][self.idx]["ACTIVITE_BOOST"] == True and preset_mode != 'Boost':
+        if self.coordinator.data[self.idx]["ACTIVITE_BOOST"] == True and preset_mode != 'Boost':
             mode = int(0)
             _key = "ACTIVITE_BOOST_Z" + \
-                str(self.data[self.site][self.idx]["numero"])
+                str(self.coordinator.data[self.idx]["numero"])
             await self.OrderToFrisquestAPI(_key, mode)
 
         if preset_mode == 'reduit_permanent':
             mode = int(7)
-            _key = "SELECTEUR_Z"+str(self.data[self.site][self.idx]["numero"])
-            self._attr_target_temperature = self.data[self.site][self.idx]["CONS_RED"]/10
+            _key = "SELECTEUR_Z"+str(self.coordinator.data[self.idx]["numero"])
+            self._attr_target_temperature = self.coordinator.data[self.idx]["CONS_RED"]/10
 
         elif preset_mode == 'confort_permanent':
             mode = int(6)
-            _key = "SELECTEUR_Z"+str(self.data[self.site][self.idx]["numero"])
-            self._attr_target_temperature = self.data[self.site][self.idx]["CONS_CONF"]/10
+            _key = "SELECTEUR_Z"+str(self.coordinator.data[self.idx]["numero"])
+            self._attr_target_temperature = self.coordinator.data[self.idx]["CONS_CONF"]/10
 
         elif preset_mode == 'reduit':
             mode = int(7)
             _key = "MODE_DERO"
-            self._attr_target_temperature = self.data[self.site][self.idx]["CONS_RED"]/10
+            self._attr_target_temperature = self.coordinator.data[self.idx]["CONS_RED"]/10
 
         elif preset_mode == 'comfort':
             mode = int(6)
             _key = "MODE_DERO"
-            self._attr_target_temperature = self.data[self.site][self.idx]["CONS_CONF"]/10
+            self._attr_target_temperature = self.coordinator.data[self.idx]["CONS_CONF"]/10
         elif preset_mode == 'hors_gel':
             mode = int(8)
-            _key = "SELECTEUR_Z"+str(self.data[self.site][self.idx]["numero"])
-            self._attr_target_temperature = self.data[self.site][self.idx]["CONS_HG"]/10
+            _key = "SELECTEUR_Z"+str(self.coordinator.data[self.idx]["numero"])
+            self._attr_target_temperature = self.coordinator.data[self.idx]["CONS_HG"]/10
 
         elif preset_mode == 'boost':
             mode = int(1)
             _key = "ACTIVITE_BOOST_Z" + \
-                str(self.data[self.site][self.idx]["numero"])
-            self._attr_target_temperature = self.data[self.site][self.idx]["CONS_CONF"]/10
+                str(self.coordinator.data[self.idx]["numero"])
+            self._attr_target_temperature = self.coordinator.data[self.idx]["CONS_CONF"]/10
 
         if _key == "MODE_DERO" or preset_mode == 'confort_permanent' or preset_mode == 'confort_permanent' or preset_mode == 'hors_gel':
             self.hvac_mode = self.modeFrisquetToHVAC(
-                0, True, preset_mode, self.data[self.site][self.idx]["CAMB"]/10, self._attr_current_temperature)
+                0, True, preset_mode, self.coordinator.data[self.idx]["CAMB"]/10, self._attr_current_temperature)
         else:
             self.hvac_mode = self.modeFrisquetToHVAC(
-                0, self.data[self.site][self.idx]["DERO"], preset_mode, self.data[self.site][self.idx]["CAMB"]/10, self._attr_current_temperature)
+                0, self.coordinator.data[self.idx]["DERO"], preset_mode, self.coordinator.data[self.idx]["CAMB"]/10, self._attr_current_temperature)
 
         self._attr_preset_mode = preset_mode
         await self.OrderToFrisquestAPI(_key, mode)
@@ -374,7 +368,7 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         nombre_demi_heures = int(difference.total_seconds() / 1800)
         # if len(self.data)== 0 :
         #    self.data = self.coordinator.data
-        programation = self.data[self.site][self.idx]["programmation"]
+        programation = self.coordinator.data[self.idx]["programmation"]
         for element in programation:
             if element["jour"] == int(jour):
                 if element["plages"][nombre_demi_heures] == 1:
