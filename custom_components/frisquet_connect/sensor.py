@@ -163,10 +163,10 @@ class ConsoCHF(SensorEntity, CoordinatorEntity):
     def icon(self) -> str | None:
         return "mdi:gas-burner"
 
-    @property
-    def should_poll(self) -> bool:
-        """Poll for those entities"""
-        return True
+    #@property
+    #def should_poll(self) -> bool:
+    #    """Poll for those entities"""
+    #    return True
 
     @property
     def device_class(self) -> SensorDeviceClass | None:
@@ -252,10 +252,10 @@ class FrisquetAlert(SensorEntity, CoordinatorEntity):
     def icon(self) -> str | None:
         return "mdi:alert"
 
-    @property
-    def should_poll(self) -> bool:
-        """Poll for those entities"""
-        return True
+    #@property
+    ##def should_poll(self) -> bool:
+    #    """Poll for those entities"""
+    #    return True
 
     @callback
     def _handle_coordinator_update(self):
@@ -317,10 +317,10 @@ class FrisquetThermometerExt(SensorEntity, CoordinatorEntity):
     def icon(self) -> str | None:
         return "mdi:thermometer"
 
-    @property
-    def should_poll(self) -> bool:
-        """Poll for those entities"""
-        return True
+    #@property
+    #def should_poll(self) -> bool:
+    #   """Poll for those entities"""
+    #    return True
 
     @property
     def device_class(self) -> SensorDeviceClass | None:
@@ -387,10 +387,10 @@ class FrisquetThermometer(SensorEntity, CoordinatorEntity):
     def icon(self) -> str | None:
         return "mdi:thermometer"
 
-    @property
-    def should_poll(self) -> bool:
-        """Poll for those entities"""
-        return True
+    #@property
+    #def should_poll(self) -> bool:
+    #    """Poll for those entities"""
+    #    return True
 
     @property
     def device_class(self) -> SensorDeviceClass | None:
