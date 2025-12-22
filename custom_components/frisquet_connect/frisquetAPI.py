@@ -157,7 +157,7 @@ class FrisquetGetInfo:
 
             # --- MODELE A : data plat ---
 
-            # On écrit toujours dans self.data (cache interne) ET on copie dans data (objet retourné)
+           # On écrit toujours dans self.data (cache interne) ET on copie dans data (objet retourné)
             self.data["Lastcall"] = datetime.datetime.now()
             self.data["nomInstall"] = site_name
             self.data["siteID"] = site
