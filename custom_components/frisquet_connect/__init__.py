@@ -24,15 +24,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     my_api = FrisquetGetInfo(hass, entry.data)
 
     async def async_update_data():
-        """Mise à jour des données via l'API."""
-        #entry.data["zone1"] newood
-        data = {}
-        data = await my_api.getTokenAndInfo(entry, data, 0, entry.data.get("SiteID", 0))
+        try:
+            data = await my_api.getTokenAndInfo(
+                entry, {}, 0, entry.data.get("SiteID", 0)
+            )
 
-        if not data or "nomInstall" not in data:
-            raise UpdateFailed("Frisquet: données invalides (token expiré / API KO)")
+            if not data or "nomInstall" not in data:
+                raise UpdateFailed("Données Frisquet invalides")
 
-        return data
+            return data
+
+        except asyncio.CancelledError:
+            _LOGGER.warning("Update Frisquet annulée (reload / arrêt HA)")
+            raise
+
+        except Exception as err:
+            raise UpdateFailed(f"Erreur Frisquet API: {err}") from err
 
     coordinator = DataUpdateCoordinator(
         hass,
