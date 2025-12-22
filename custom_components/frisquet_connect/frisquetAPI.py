@@ -122,8 +122,10 @@ class FrisquetGetInfo:
         url = API_URL + identifiant + "?token=" + token
 
         _LOGGER.debug(" GET API : %s", url)
+        # limit calls to once every 4 minutes
         should_call = (not self.data) or ("Lastcall" not in self.data) or (
             self.data["Lastcall"] + datetime.timedelta(minutes=4) < datetime.datetime.now())
+
         if should_call:
 
             # GET API - Call
