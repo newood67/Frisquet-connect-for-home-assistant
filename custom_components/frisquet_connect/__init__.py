@@ -2,7 +2,7 @@
 import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from datetime import timedelta
 from .const import (
     DOMAIN,
@@ -26,8 +26,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def async_update_data():
         """Mise à jour des données via l'API."""
         #entry.data["zone1"] newood
-        await my_api.getTokenAndInfo(entry, entry.data, 0, entry.data.get("SiteID", 0))
-        return my_api.data
+        data = {}
+        data = await my_api.getTokenAndInfo(entry, data, 0, entry.data.get("SiteID", 0))
+
+        if not data or "nomInstall" not in data:
+            raise UpdateFailed("Frisquet: données invalides (token expiré / API KO)")
+
+        return data
 
     coordinator = DataUpdateCoordinator(
         hass,
@@ -57,8 +62,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
-        if DOMAIN in hass.data and entry.unique_id in hass.data[DOMAIN]:
-            hass.data[DOMAIN].pop(entry.unique_id)
+        if DOMAIN in hass.data and entry.entry_id  in hass.data[DOMAIN]:
+            hass.data[DOMAIN].pop(entry.entry_id )
             _LOGGER.debug(
                 "Données de l'entrée {entry.entry_id} supprimées de hass.data[{DOMAIN}]")
         else:

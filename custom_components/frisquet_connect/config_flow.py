@@ -4,7 +4,7 @@ from homeassistant.config_entries import ConfigFlow
 from homeassistant.data_entry_flow import FlowResult
 import voluptuous as vol
 
-from .const import DOMAIN, AUTH_API, API_URL
+from .const import DOMAIN
 from .frisquetAPI import FrisquetGetInfo
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,73 +20,99 @@ class FrisquetConfigFlow(ConfigFlow, domain=DOMAIN):
                 "config_flow step user (1). 1er appel : pas de user_input -> "
                 "on affiche le form user_form"
             )
-            return self.async_show_form(step_id="user", data_schema=vol.Schema(
-                {
-                    vol.Required("email"): str,
-                    vol.Required("password"): str
-                }
-            ))
+            return self.async_show_form(
+                step_id="user",
+                data_schema=vol.Schema(
+                    {
+                        vol.Required("email"): str,
+                        vol.Required("password"): str,
+                    }
+                ),
+            )
 
-        self.data.update(user_input)
+        # Stockage flow data
+        self.data = dict(user_input)
 
-        # Crée une instance de FrisquetGetInfo avec les bons arguments
-
-        #Newood  : ajout de "self."
+        # Instance API
         self.frisquet_api = FrisquetGetInfo(self.hass, self.data)
-        
-        #Newood : 1ère Authentification + récupération site
+
+        # 1ère Auth : récup token + sites
         auth = await self.frisquet_api.api_auth(
             user_input["email"],
             user_input["password"],
         )
 
-        #Newood : token, email, password pour la suite
-        self.data["email"] = user_input["email"]
-        self.data["password"] = user_input["password"]
-        self.data["token"] = auth["token"]
+        self.data["token"] = auth.get("token")
+        self.data["sites"] = [s["nom"] for s in auth.get("utilisateur", {}).get("sites", [])]
 
-        #Newood : Récupération des sites
-        self.data["sites"] = [s["nom"] for s in auth["utilisateur"]["sites"]]
-
-        #Newood : ID chaudière site 0
-        self.data["identifiant_chaudiere"] = auth["utilisateur"]["sites"][0]["identifiant_chaudiere"]
+        # (Optionnel) identifiant chaudière site 0 pour debug/visibilité
+        try:
+            self.data["identifiant_chaudiere"] = auth["utilisateur"]["sites"][0]["identifiant_chaudiere"]
+        except Exception:
+            self.data["identifiant_chaudiere"] = None
 
         return await self.async_step_2()
 
-    async def async_step_2(self, user_input: dict | None = None):
-        if len(self.data["sites"]) > 1:
+    async def async_step_2(self, user_input: dict | None = None) -> FlowResult:
+        sites = self.data.get("sites") or []
+
+        # Choix du site si plusieurs
+        if len(sites) > 1:
             if user_input is None:
-                return self.async_show_form(step_id="2", data_schema=vol.Schema(
-                    {
-                        vol.Required("site", default=0): vol.In(self.data["sites"]),
-                    }
-                ))
+                return self.async_show_form(
+                    step_id="2",
+                    data_schema=vol.Schema(
+                        {
+                            vol.Required("site", default=sites[0]): vol.In(sites),
+                        }
+                    ),
+                )
             self.data.update(user_input)
-            site = self.data["sites"].index(user_input["site"])
+            site = sites.index(user_input["site"])
         else:
             site = 0
 
-        self.datadict = []
-        for i in range(len(self.data["sites"])):
-            self.datadict.append("")
+        # IMPORTANT : runtime dict séparé (pas self.data)
+        runtime = {
+            "email": self.data["email"],
+            "password": self.data["password"],
+            # On peut réutiliser le token déjà obtenu pour éviter un relogin immédiat
+            "token": self.data.get("token"),
+            "identifiant_chaudiere": self.data.get("identifiant_chaudiere"),
+        }
 
-        # Crée une instance de FrisquetGetInfo avec les bons arguments
-        # frisquet_api = FrisquetGetInfo(self.hass, self.data)
+        # Appel API pour construire le payload final 
+        payload = await self.frisquet_api.getTokenAndInfo(
+            entry=None,     # pas de ConfigEntry dans le flow
+            data=runtime,   # runtime dict mutable
+            idx=0,
+            site=site,
+        )
 
-        # Appelle getTokenAndInfo sur l'instance de FrisquetGetInfo avec les bons arguments
-        #Newood  : ajout de "self."
-        self.data[site] = await self.frisquet_api.getTokenAndInfo(self,self.data, 0, site)
+        # On force quelques champs utiles dans l'entry
+        payload["SiteID"] = site
+        payload["email"] = self.data["email"]
+        payload["password"] = self.data["password"]
+        payload["token"] = runtime.get("token") or payload.get("token")
 
-        _LOGGER.debug("Config_Flow data=%s", self.data)
+        # identifiant_chaudiere au niveau racine (utile pour refresh)
+        if "identifiant_chaudiere" not in payload:
+            # essaie depuis zone1 si présent
+            if "zone1" in payload and "identifiant_chaudiere" in payload["zone1"]:
+                payload["identifiant_chaudiere"] = payload["zone1"]["identifiant_chaudiere"]
 
-        self.datadict[site] = self.data[site]
-        self.datadict[site]["nomInstall"] = self.data["sites"][site]
-        self.datadict[site]["SiteID"] = site
-        self.datadict[site]["email"] = self.data["email"]
-        self.datadict[site]["password"] = self.data["password"]
-        self.datadict[site]["token"] = self.data["token"]
-        self.datadict[site]["identifiant_chaudiere"] = self.data["identifiant_chaudiere"]
+        # Unique ID stable
+        unique = None
+        if "zone1" in payload and "identifiant_chaudiere" in payload["zone1"]:
+            unique = payload["zone1"]["identifiant_chaudiere"]
+        elif payload.get("identifiant_chaudiere"):
+            unique = payload["identifiant_chaudiere"]
 
-        #await self.async_set_unique_id(str(self.datadict[site]["zone1"]["identifiant_chaudiere"]))
-        await self.async_set_unique_id(str(self.datadict[site]["zone1"]["identifiant_chaudiere"]))
-        return self.async_create_entry(title=self.datadict[site]["nomInstall"], data=self.datadict[site])
+        if unique:
+            await self.async_set_unique_id(str(unique))
+
+        title = payload.get("nomInstall") or (sites[site] if sites else "Frisquet")
+        payload["email"] = self.data["email"]
+        payload["password"] = self.data["password"]
+        _LOGGER.debug("Config_Flow payload=%s", payload)
+        return self.async_create_entry(title=title, data=payload)

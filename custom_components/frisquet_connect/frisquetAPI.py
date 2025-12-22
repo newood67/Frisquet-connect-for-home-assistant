@@ -54,7 +54,14 @@ class FrisquetGetInfo:
 
     async def getTokenAndInfo(self, entry, data, idx, site, retry=False):
         #retry=False : Pour pouvoir relancé 1 fois ne cas de token expiré
-        _LOGGER.debug("JKS entry data : %s",entry.data  )
+        if entry is not None:
+            _LOGGER.debug("JKS entry data : %s", entry.data)
+        else:
+            _LOGGER.debug("JKS entry data : <None> (config_flow)")
+
+        #_LOGGER.error("DEBUG entry.data = %s", entry.data if entry else None)
+        #_LOGGER.error("DEBUG data (runtime) = %s", data)
+
         # Credentials
         #email    = entry.data["zone1"]["email"]
         #password = entry.data["zone1"]["password"]
@@ -63,30 +70,50 @@ class FrisquetGetInfo:
         #    email = zone1["email"]
         #    password = zone1["password"]
        # else:
-        email = entry.data.get("email")
-        password = entry.data.get("password")
-        # Authentification 
-        token = data.get("token")
+        zone1 = {}
+        # --- Récupération des credentials ---
+        token = self.data.get("token") or data.get("token") or entry.data.get("token")
+
+        email = entry.data.get("email") if entry else data.get("email")
+        password = entry.data.get("password") if entry else data.get("password")
+
+
         auth_json_reply = None
 
         if not token:
+            if not email or not password:
+                raise Exception(
+                    "Frisquet: email/password requis pour ré-authentification"
+                )
+
             auth_json_reply = await self.api_auth(email, password)
             token = auth_json_reply.get("token")
             if not token:
                 raise Exception("Frisquet API did not return a token")
+
+            self.data["token"] = token
             data["token"] = token
 
             # Récupération des sites 
-            data["sites"] = []
-            for i in range(len(auth_json_reply["utilisateur"]["sites"])):
-                data["sites"].append(auth_json_reply["utilisateur"]["sites"][i]["nom"])
+            #data["sites"] = []
+            #for i in range(len(auth_json_reply["utilisateur"]["sites"])):
+            #    data["sites"].append(auth_json_reply["utilisateur"]["sites"][i]["nom"])
 
         # ID Chaufière 
 
         if auth_json_reply:
             identifiant = auth_json_reply["utilisateur"]["sites"][site]["identifiant_chaudiere"]
         else:
-            identifiant = data["identifiant_chaudiere"]
+            identifiant = (
+                entry.data.get("identifiant_chaudiere") if entry
+                else data.get("identifiant_chaudiere")
+            )
+
+        if not identifiant:
+            raise Exception(
+                "Frisquet: identifiant_chaudiere introuvable "
+                "(ConfigEntry absente ou incomplète)"
+            )
 
         
         # GET API - Config  
@@ -102,8 +129,11 @@ class FrisquetGetInfo:
                 if resp.status in (401, 403):
                     if retry:
                         _LOGGER.error("Token invalid after re-login, aborting")
-                        return self.previousdata
-                    data.pop("token", None)
+                        raise Exception("Frisquet: token invalide après relogin")
+                    self.data.pop("token", None)
+                    if isinstance(data, dict):
+                        data.pop("token", None)
+
                     return await self.getTokenAndInfo(entry, data, idx, site, retry=True)
                 
                 response = await resp.json()
@@ -115,94 +145,79 @@ class FrisquetGetInfo:
 
         _LOGGER.debug("In getToken and info Frisquet API, response : %s", reponseAnonimized)
 
-        site_name = data.get("nomInstall", f"site_{site}")
+        site_name = response.get("nom") or data.get("nomInstall") or f"site_{site}"
 
-        if "zones" in response or idx == 0:
-            for i in range(len(response["zones"])):
-                if response["zones"][i]["numero"] != "":
-                    if i == 0:
-                        self.data[site_name] = {}
-                        self.data[site_name]["alarmes"] = {}
+        # --- MODELE A : data plat ---
+        # On écrit toujours dans self.data (cache interne) ET on copie dans data (objet retourné)
+        self.data["nomInstall"] = site_name
+        self.data["siteID"] = site
+        self.data["timezone"] = response.get("timezone")
+        self.data["identifiant_chaudiere"] = response.get("identifiant_chaudiere", identifiant)
 
-                    self.data[site_name]["alarmes"]                                   = response["alarmes"]
-                    self.data[site_name]["zone"+  str(i+1)]                           = {}
-                    self.data[site_name]["zone" + str(i+1)]                           = response["zones"][i]["carac_zone"]
-                    self.data[site_name]["zone" + str(i+1)]["boost_disponible"]       = response["zones"][i]["boost_disponible"]
-                    self.data[site_name]["zone" + str(i+1)]["identifiant"]            = response["zones"][i]["identifiant"]
-                    self.data[site_name]["zone" + str(i+1)]["numero"]                 = response["zones"][i]["numero"]
-                    self.data[site_name]["zone" + str(i+1)]["nom"]                    = response["zones"][i]["nom"]
-                    self.data[site_name]["zone" + str(i+1)]["programmation"]          = response["zones"][i]["programmation"]
-                    self.data[site_name]["zone" + str(i+1)]["date_derniere_remontee"] = response["date_derniere_remontee"]
+        self.data["token"] = token
+        
 
-                    if response["produit"]["chaudiere"] == None:
-                        self.data[site_name]["zone" + str(i+1)]["produit"]    = "Not defined"
-                    else:
-                        self.data[site_name]["zone" + str(i+1)]["produit"]    = response["produit"]["chaudiere"]+" "+response["produit"]["gamme"]+" " + response["produit"]["puissance"]
+        self.data["alarmes"] = response.get("alarmes", [])
+        self.data["ecs"] = response.get("ecs", {})
 
-                    self.data[site_name]["zone" + str(i+1)]["identifiant_chaudiere"]    = response["identifiant_chaudiere"]
+        # zones -> zone1/zone2/zone3
+        zones = response.get("zones", [])
+        for z in zones:
+            numero = z.get("numero")
+            if not numero:
+                continue
 
-                    self.data[site_name]["zone" + str(i+1)]["token"] = token
-                    
-                    if "sites" in data:
-                        self.data[site_name]["nomInstall"]    = data["sites"][site]
-                        self.data[site_name]["siteID"]        = site
-                        self.data["nomInstall"]                         = data["sites"][site]
-                    elif "nomInstall" in data:
-                        self.data[site_name]["nomInstall"]    = data["nomInstall"]
-                        self.data[site_name]["siteID"]        = site
-                        self.data["nomInstall"]                         = data["nomInstall"]
+            zone_key = f"zone{numero}"
+            self.data[zone_key] = {}
+            self.data[zone_key].update(z.get("carac_zone", {}))
 
-                    self.data[site_name]["zone" + str(i+1)]["email"]          = email
-                    self.data[site_name]["zone" + str(i+1)]["password"]       = password
-                    self.data[site_name]["zone" + str(i+1)]["T_EXT"]          = response["environnement"]["T_EXT"]
+            self.data[zone_key]["boost_disponible"] = z.get("boost_disponible")
+            self.data[zone_key]["identifiant"] = z.get("identifiant")
+            self.data[zone_key]["numero"] = numero
+            self.data[zone_key]["nom"] = z.get("nom")
+            self.data[zone_key]["programmation"] = z.get("programmation", [])
+            self.data[zone_key]["date_derniere_remontee"] = response.get("date_derniere_remontee")
 
-                    self.data[site_name]["modes_ecs_"]        = {}
-
-                    for w in range(len(response["modes_ecs"])):
-                        nomModeECS: str
-                        idModeECS: str
-                        nomModeECS = response["modes_ecs"][w]["nom"]
-                        nomModeECS = nomModeECS.replace("\ue809", "Timer")
-                        idModeECS = response["modes_ecs"][w]["id"]
-                        self.data[site_name]["modes_ecs_"][nomModeECS] = {}
-                        self.data[site_name]["modes_ecs_"][nomModeECS] = idModeECS
-
-
-            self.data[site_name]["ecs"] = response["ecs"]
-
-            self.data["email"]                  = email
-            self.data["password"]               = password
-            self.data["identifiant_chaudiere"]  = identifiant
-            
-            #Conso
-            try:
-                url2 = (API_URL + identifiant +"/conso?token=" + token +"&types[]=CHF&types[]=SAN")
-
-                async with aiohttp.ClientSession(headers=headers) as session2:
-                    async with session2.get(url2) as resp2:
-                        conso = await resp2.json()
-
-                self.data[site_name]["zone1"]["energy"] = {}
-                self.data[site_name]["zone1"]["energy"]["CHF"] = sum(
-                    c["valeur"] for c in conso.get("CHF", [])
-                )
-
-                if "SAN" in conso:
-                    self.data[site_name]["zone1"]["energy"]["SAN"] = sum(
-                        c["valeur"] for c in conso.get("SAN", [])
-                )
-
-            except Exception:
-                _LOGGER.debug("Conso unavailable")
-
-            #Save
-            self.previousdata = copy.deepcopy(self.data)
-
-
-            if idx == 0:
-                return self.data[site_name]
+            produit = response.get("produit") or {}
+            if produit.get("chaudiere") is None:
+                self.data[zone_key]["produit"] = "Not defined"
             else:
-                return self.data[site_name][idx]
+                self.data[zone_key]["produit"] = f"{produit.get('chaudiere')} {produit.get('gamme')} {produit.get('puissance')}"
 
+            self.data[zone_key]["identifiant_chaudiere"] = self.data["identifiant_chaudiere"]
+            self.data[zone_key]["token"] = token
+            #self.data[zone_key]["email"] = email
+            #self.data[zone_key]["password"] = password
+            self.data[zone_key]["T_EXT"] = (response.get("environnement") or {}).get("T_EXT")
 
-        return self.previousdata
+        # modes_ecs_
+        modes = {}
+        for m in response.get("modes_ecs", []):
+            nom = (m.get("nom") or "").replace("\ue809", "Timer")
+            modes[nom] = m.get("id")
+        self.data["modes_ecs_"] = modes
+
+        # conso (inchangé, mais il faut écrire dans zone1 si elle existe)
+        try:
+            url2 = f"{API_URL}{identifiant}/conso?token={token}&types[]=CHF&types[]=SAN"
+            headers = {"User-Agent": "okhttp/4.12.0"}
+
+            async with aiohttp.ClientSession(headers=headers) as session2:
+                async with session2.get(url2) as resp2:
+                    conso = await resp2.json()
+
+            if "zone1" in self.data:
+                self.data["zone1"].setdefault("energy", {})
+                self.data["zone1"]["energy"]["CHF"] = sum(c["valeur"] for c in conso.get("CHF", []))
+                if "SAN" in conso:
+                    self.data["zone1"]["energy"]["SAN"] = sum(c["valeur"] for c in conso.get("SAN", []))
+
+        except Exception:
+            _LOGGER.debug("Conso unavailable")
+
+        # recopie dans data (ce qui est retourné au coordinator)
+        data.clear()
+        data.update(copy.deepcopy(self.data))
+        self.previousdata = copy.deepcopy(self.data)
+
+        return data
