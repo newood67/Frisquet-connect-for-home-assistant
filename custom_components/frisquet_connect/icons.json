@@ -11,7 +11,8 @@
                             "boost": "mdi:rocket-launch",
                             "hors_gel": "mdi:snowflake",
                             "reduit_permanent": "mdi:leaf-circle-outline",
-                            "confort_permanent": "mdi:sofa-outline"
+                            "confort_permanent": "mdi:sofa-outline",
+                            "vacances": "mdi:briefcase-outline"
                         }
                     }
                 }

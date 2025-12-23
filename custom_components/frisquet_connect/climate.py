@@ -49,10 +49,10 @@ async def async_timeout():
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     """Configuration des entités sensor à partir de la configuration
     ConfigEntry passée en argument"""
-    _LOGGER.debug("In Climate.py async_setup_entry %s", entry.entry_id)
+    _LOGGER.debug("In Climate.py async_setup_entry ")  # %s", entry.entry_id)
     coordinator = hass.data[DOMAIN][entry.entry_id]  # Utilise entry.entry_id
 
-    _LOGGER.debug("In Climate.py asyncsetup entry2 %s'", coordinator.data)
+    _LOGGER.debug("In Climate.py asyncsetup entry2")  # %s'", coordinator.data)
     coordinator.data["timezone"] = hass.config.time_zone
     entitylist = []
     entity = FrisquetConnectEntity(
@@ -93,7 +93,7 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         self.idx = idx
         self.site = site
         self.coordinator = coordinator
-        #self.sites = config_entry.data["zone1"]["sites"]
+        # self.sites = config_entry.data["zone1"]["sites"]
         self.tz = coordinator.data["timezone"]
         # _LOGGER.debug("Init Entity='%s'", self.coordinator.data[self.idx] )
         self._attr_unique_id = str(
@@ -114,7 +114,8 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
             self.coordinator.data[self.idx]["boost_disponible"])
         self._attr_translation_key = "frisquet_connect"
 
-        self.IDchaudiere = str(self.coordinator.data[self.idx]["identifiant_chaudiere"])
+        self.IDchaudiere = str(
+            self.coordinator.data[self.idx]["identifiant_chaudiere"])
         self.zoneNR: str = self.coordinator.data[self.idx]["numero"]
         self.token = self.coordinator.data[self.idx]["token"]
         self.Devicename = self.coordinator.data[self.idx]["produit"]
@@ -142,7 +143,8 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         return DeviceInfo(
             identifiers={
                 # Serial numbers are unique identifiers within a specific domain
-                (DOMAIN, self.coordinator.data[self.idx]["identifiant_chaudiere"])
+                (DOMAIN, self.coordinator.data[self.idx]
+                 ["identifiant_chaudiere"])
             },
             name=self._attr_name,  # self.coordinator.data[self.idx]["nom"],
             manufacturer="Frisquet",
@@ -155,7 +157,7 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         return "mdi:home-thermometer-outline"
 
     # @property
-    #def should_poll(self) -> bool:
+    # def should_poll(self) -> bool:
     #    """Poll for those entities"""
     #    return True
 
@@ -190,7 +192,6 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
         )
 
         self.async_write_ha_state()
-
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Set new target hvac mode."""
@@ -227,7 +228,7 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
             _LOGGER.debug("Key confort : %s", _key)
         elif self._attr_preset_mode == "reduit" or self._attr_preset_mode == "reduit_permanent":
             _key = "CONS_RED_Z"+str(self.coordinator.data[self.idx]["numero"])
-        elif self._attr_preset_mode == "hors_gel":
+        elif self._attr_preset_mode == "hors_gel" or self._attr_preset_mode == "vacances":
             _key = "CONS_HG_Z"+str(self.coordinator.data[self.idx]["numero"])
         else:
             pass
@@ -297,15 +298,17 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
     def DefineavAilablePresetmodes(self, boost: bool):
         _LOGGER.debug("defineaavailPresetMode")
         if boost == True:
-            return [PRESET_COMFORT, PRESET_MODE.PRESET_REDUIT, PRESET_BOOST, PRESET_MODE.PRESET_HG, PRESET_MODE.PRESET_REDUITP, PRESET_MODE.PRESET_COMFORTP]
+            return [PRESET_COMFORT, PRESET_MODE.PRESET_REDUIT, PRESET_BOOST, PRESET_MODE.PRESET_HG, PRESET_MODE.PRESET_REDUITP, PRESET_MODE.PRESET_COMFORTP, PRESET_MODE.PRESET_VAC]
         else:
-            return [PRESET_COMFORT, PRESET_MODE.PRESET_REDUIT, PRESET_MODE.PRESET_HG, PRESET_MODE.PRESET_REDUITP, PRESET_MODE.PRESET_COMFORTP]
+            return [PRESET_COMFORT, PRESET_MODE.PRESET_REDUIT, PRESET_MODE.PRESET_HG, PRESET_MODE.PRESET_REDUITP, PRESET_MODE.PRESET_COMFORTP, PRESET_MODE.PRESET_VAC]
 
     def defPreset(self, selecteur, mode, BOOST, Dero):
         _LOGGER.debug("defPreset selecteur: %s mode: %s BOOST: %s Dero: %s",
                       selecteur, mode, BOOST, Dero)
         # if BOOST == True:
         #    return  PRESET_BOOST
+        if self.coordinator.data["vacances"]["MODE_VACANCES"] == True:
+            return "vacances"
         if Dero == True:
             if selecteur == 5 and mode == 7:
                 return "reduit"
@@ -336,7 +339,7 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
             return CONS_CONF
         elif preset_mode == "reduit" or preset_mode == "reduit_permanent":
             return CONS_RED
-        elif preset_mode == "hors_gel":
+        elif preset_mode == "hors_gel" or preset_mode == "vacances":
             return CONS_HG
 
     def modeFrisquetToHVAC(self, mode: int, derog: bool, preset_mode, CAMB, TAMB):
@@ -356,7 +359,7 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
             return HVACMode.OFF
 
     def getPresetFromProgramation(self):
-        #Newood -- print(self.tz)
+        # Newood -- print(self.tz)
         # desired_timezone = pytz.timezone(self.tz)
         desired_timezone = ZoneInfo(self.tz)
         maintenant = datetime.now(desired_timezone)
@@ -393,9 +396,9 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
                 _LOGGER.debug("In websocket_confirmation order sent")
                 async for msg in ws:
                     if msg.type == aiohttp.WSMsgType.TEXT:
-                        #Newood --print("Message reçu :", msg.data)
+                        # Newood --print("Message reçu :", msg.data)
                         _LOGGER.debug("Message reçu : %s", msg.data)
-                    #Newood -- change start
+                    # Newood -- change start
                         try:
                             data = msg.json()
                         except Exception:
@@ -410,8 +413,8 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
                         if msg_type == "ORDRE_EN_ATTENTE":
                             _LOGGER.debug("ORDRE_EN_ATTENTE")
                             continue
-                    #Newood -- change end
-                        #if msg.data == '{"type":"ORDRE_EN_ATTENTE"}':
+                    # Newood -- change end
+                        # if msg.data == '{"type":"ORDRE_EN_ATTENTE"}':
                         #    try:
                         #       pass  # await self.async_update()
                         #        # self.async_write_ha_state()
@@ -421,12 +424,11 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
                         #             "In websocket_confirmation exception during update after ordre en attente")
 
                     elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
-                        #Newood Add:
+                        # Newood Add:
                         _LOGGER.debug("WebSocket closed/error")
                         break
         except Exception as e:
             _LOGGER.error("Erreur dans websocket_confirmation : %s", e)
-
 
     async def OrderToFrisquestAPI(self, key, valeur):
         if key == "MODE_ECS":

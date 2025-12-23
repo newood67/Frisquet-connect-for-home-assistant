@@ -20,7 +20,7 @@ class FrisquetGetInfo:
         caracteres = string.ascii_letters + string.digits
         return ''.join(random.choice(caracteres) for _ in range(longueur))
 
-    async def api_auth(self,email, password):
+    async def api_auth(self, email, password):
         payload = {
             "locale": "fr",
             "email": email,
@@ -28,7 +28,7 @@ class FrisquetGetInfo:
             "type_client": "IOS",
         }
 
-        _LOGGER.debug("Authentification payload : %s",payload)
+        _LOGGER.debug("Authentification payload : %s", payload)
 
         headers = {
             'Accept-Language': 'FR',
@@ -38,45 +38,47 @@ class FrisquetGetInfo:
             'Accept-Encoding': 'gzip',
             'User-Agent': 'okhttp/4.12.0'
         }
-            #'Content-Length': str(len(str(payload))),
-            #'Host': 'fcutappli.frisquet.com',
+        # 'Content-Length': str(len(str(payload))),
+        # 'Host': 'fcutappli.frisquet.com',
         appid = self.generer_Appid_random()
         _AUTH_API = AUTH_API + '?app_id=' + appid
-        _LOGGER.debug("Authentification call : %s",_AUTH_API)
+        _LOGGER.debug("Authentification call : %s", _AUTH_API)
 
-        #_session = aiohttp.ClientSession(headers="")
+        # _session = aiohttp.ClientSession(headers="")
 
         async with aiohttp.ClientSession() as session:
             async with session.post(url=_AUTH_API, headers=headers, json=payload) as resp:
                 if resp.status != 201:
-                    raise Exception(f"Authentification failed with http ({resp.status})")
+                    raise Exception(
+                        f"Authentification failed with http ({resp.status})")
                 return await resp.json()
 
     async def getTokenAndInfo(self, entry, data, idx, site, retry=False):
-        #retry=False : Pour pouvoir relancé 1 fois ne cas de token expiré
+        # retry=False : Pour pouvoir relancé 1 fois ne cas de token expiré
         if entry is not None:
-            _LOGGER.debug("JKS entry data : %s", entry.data)
+            _LOGGER.debug("JKS entry data  not None")  # : %s", entry.data)
         else:
             _LOGGER.debug("JKS entry data : <None> (config_flow)")
 
-        #_LOGGER.error("DEBUG entry.data = %s", entry.data if entry else None)
-        #_LOGGER.error("DEBUG data (runtime) = %s", data)
+        # _LOGGER.error("DEBUG entry.data = %s", entry.data if entry else None)
+        # _LOGGER.error("DEBUG data (runtime) = %s", data)
 
         # Credentials
-        #email    = entry.data["zone1"]["email"]
-        #password = entry.data["zone1"]["password"]
+        # email    = entry.data["zone1"]["email"]
+        # password = entry.data["zone1"]["password"]
         # Si on a une zone sinon prendre l'entrée du formulaire
-        #if entry.data.get("zone1"):
+        # if entry.data.get("zone1"):
         #    email = zone1["email"]
         #    password = zone1["password"]
        # else:
         zone1 = {}
         # --- Récupération des credentials ---
-        token = self.data.get("token") or data.get("token") or entry.data.get("token")
+        token = self.data.get("token") or data.get(
+            "token") or entry.data.get("token")
 
         email = entry.data.get("email") if entry else data.get("email")
-        password = entry.data.get("password") if entry else data.get("password")
-
+        password = entry.data.get(
+            "password") if entry else data.get("password")
 
         auth_json_reply = None
 
@@ -94,12 +96,12 @@ class FrisquetGetInfo:
             self.data["token"] = token
             data["token"] = token
 
-            # Récupération des sites 
-            #data["sites"] = []
-            #for i in range(len(auth_json_reply["utilisateur"]["sites"])):
+            # Récupération des sites
+            # data["sites"] = []
+            # for i in range(len(auth_json_reply["utilisateur"]["sites"])):
             #    data["sites"].append(auth_json_reply["utilisateur"]["sites"][i]["nom"])
 
-        # ID Chaufière 
+        # ID Chaufière
 
         if auth_json_reply:
             identifiant = auth_json_reply["utilisateur"]["sites"][site]["identifiant_chaudiere"]
@@ -115,109 +117,132 @@ class FrisquetGetInfo:
                 "(ConfigEntry absente ou incomplète)"
             )
 
-        
-        # GET API - Config  
+        # GET API - Config
         headers = {"User-Agent": "okhttp/4.12.0"}
         url = API_URL + identifiant + "?token=" + token
 
-        _LOGGER.debug(" GET API : %s", url) 
+        _LOGGER.debug(" GET API : %s", url)
+        # limit calls to once every 4 minutes
+        should_call = (not self.data) or ("Lastcall" not in self.data) or (
+            self.data["Lastcall"] + datetime.timedelta(minutes=4) < datetime.datetime.now())
 
-        # GET API - Call  
-        async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(url) as resp:
-                # Si token expiré
-                if resp.status in (401, 403):
-                    if retry:
-                        _LOGGER.error("Token invalid after re-login, aborting")
-                        raise Exception("Frisquet: token invalide après relogin")
-                    self.data.pop("token", None)
-                    if isinstance(data, dict):
-                        data.pop("token", None)
+        if should_call:
 
-                    return await self.getTokenAndInfo(entry, data, idx, site, retry=True)
-                
-                response = await resp.json()
+            # GET API - Call
+            async with aiohttp.ClientSession(headers=headers) as session:
+                async with session.get(url) as resp:
+                    # Si token expiré
+                    if resp.status in (401, 403):
+                        if retry:
+                            _LOGGER.error(
+                                "Token invalid after re-login, aborting")
+                            raise Exception(
+                                "Frisquet: token invalide après relogin")
+                        self.data.pop("token", None)
+                        if isinstance(data, dict):
+                            data.pop("token", None)
 
-        #Anonimized
-        reponseAnonimized = response
-        reponseAnonimized["code_postal"] = ""
-        reponseAnonimized["emails_alerte"] = ""
+                        return await self.getTokenAndInfo(entry, data, idx, site, retry=True)
 
-        _LOGGER.debug("In getToken and info Frisquet API, response : %s", reponseAnonimized)
+                    response = await resp.json()
 
-        site_name = response.get("nom") or data.get("nomInstall") or f"site_{site}"
+            # Anonimized
+            reponseAnonimized = response
+            reponseAnonimized["code_postal"] = ""
+            reponseAnonimized["emails_alerte"] = ""
 
-        # --- MODELE A : data plat ---
-        # On écrit toujours dans self.data (cache interne) ET on copie dans data (objet retourné)
-        self.data["nomInstall"] = site_name
-        self.data["siteID"] = site
-        self.data["timezone"] = response.get("timezone")
-        self.data["identifiant_chaudiere"] = response.get("identifiant_chaudiere", identifiant)
+            _LOGGER.debug(
+                "In getToken and info Frisquet API, response : %s", reponseAnonimized)
 
-        self.data["token"] = token
-        
+            site_name = response.get("nom") or data.get(
+                "nomInstall") or f"site_{site}"
 
-        self.data["alarmes"] = response.get("alarmes", [])
-        self.data["ecs"] = response.get("ecs", {})
+            # --- MODELE A : data plat ---
 
-        # zones -> zone1/zone2/zone3
-        zones = response.get("zones", [])
-        for z in zones:
-            numero = z.get("numero")
-            if not numero:
-                continue
+           # On écrit toujours dans self.data (cache interne) ET on copie dans data (objet retourné)
+            self.data["Lastcall"] = datetime.datetime.now()
+            self.data["nomInstall"] = site_name
+            self.data["siteID"] = site
+            self.data["timezone"] = response.get("timezone")
+            self.data["identifiant_chaudiere"] = response.get(
+                "identifiant_chaudiere", identifiant)
 
-            zone_key = f"zone{numero}"
-            self.data[zone_key] = {}
-            self.data[zone_key].update(z.get("carac_zone", {}))
+            self.data["token"] = token
 
-            self.data[zone_key]["boost_disponible"] = z.get("boost_disponible")
-            self.data[zone_key]["identifiant"] = z.get("identifiant")
-            self.data[zone_key]["numero"] = numero
-            self.data[zone_key]["nom"] = z.get("nom")
-            self.data[zone_key]["programmation"] = z.get("programmation", [])
-            self.data[zone_key]["date_derniere_remontee"] = response.get("date_derniere_remontee")
+            self.data["alarmes"] = response.get("alarmes", [])
+            self.data["ecs"] = response.get("ecs", {})
+            self.data["vacances"] = response.get("vacances", {})
 
-            produit = response.get("produit") or {}
-            if produit.get("chaudiere") is None:
-                self.data[zone_key]["produit"] = "Not defined"
-            else:
-                self.data[zone_key]["produit"] = f"{produit.get('chaudiere')} {produit.get('gamme')} {produit.get('puissance')}"
+            # zones -> zone1/zone2/zone3
+            zones = response.get("zones", [])
+            for z in zones:
+                numero = z.get("numero")
+                if not numero:
+                    continue
 
-            self.data[zone_key]["identifiant_chaudiere"] = self.data["identifiant_chaudiere"]
-            self.data[zone_key]["token"] = token
-            #self.data[zone_key]["email"] = email
-            #self.data[zone_key]["password"] = password
-            self.data[zone_key]["T_EXT"] = (response.get("environnement") or {}).get("T_EXT")
+                zone_key = f"zone{numero}"
+                self.data[zone_key] = {}
+                self.data[zone_key].update(z.get("carac_zone", {}))
 
-        # modes_ecs_
-        modes = {}
-        for m in response.get("modes_ecs", []):
-            nom = (m.get("nom") or "").replace("\ue809", "Timer")
-            modes[nom] = m.get("id")
-        self.data["modes_ecs_"] = modes
+                self.data[zone_key]["boost_disponible"] = z.get(
+                    "boost_disponible")
+                self.data[zone_key]["identifiant"] = z.get("identifiant")
+                self.data[zone_key]["numero"] = numero
+                self.data[zone_key]["nom"] = z.get("nom")
+                self.data[zone_key]["programmation"] = z.get(
+                    "programmation", [])
+                self.data[zone_key]["date_derniere_remontee"] = response.get(
+                    "date_derniere_remontee")
 
-        # conso (inchangé, mais il faut écrire dans zone1 si elle existe)
-        try:
-            url2 = f"{API_URL}{identifiant}/conso?token={token}&types[]=CHF&types[]=SAN"
-            headers = {"User-Agent": "okhttp/4.12.0"}
+                produit = response.get("produit") or {}
+                if produit.get("chaudiere") is None:
+                    self.data[zone_key]["produit"] = "Not defined"
+                else:
+                    self.data[zone_key]["produit"] = f"{produit.get('chaudiere')} {produit.get('gamme')} {produit.get('puissance')}"
 
-            async with aiohttp.ClientSession(headers=headers) as session2:
-                async with session2.get(url2) as resp2:
-                    conso = await resp2.json()
+                self.data[zone_key]["identifiant_chaudiere"] = self.data["identifiant_chaudiere"]
+                self.data[zone_key]["token"] = token
+                # self.data[zone_key]["email"] = email
+                # self.data[zone_key]["password"] = password
+                self.data[zone_key]["T_EXT"] = (
+                    response.get("environnement") or {}).get("T_EXT")
 
-            if "zone1" in self.data:
-                self.data["zone1"].setdefault("energy", {})
-                self.data["zone1"]["energy"]["CHF"] = sum(c["valeur"] for c in conso.get("CHF", []))
-                if "SAN" in conso:
-                    self.data["zone1"]["energy"]["SAN"] = sum(c["valeur"] for c in conso.get("SAN", []))
+            # modes_ecs_
+            modes = {}
+            for m in response.get("modes_ecs", []):
+                nom = (m.get("nom") or "").replace("\ue809", "Timer")
+                modes[nom] = m.get("id")
+            self.data["modes_ecs_"] = modes
 
-        except Exception:
-            _LOGGER.debug("Conso unavailable")
+            # conso (inchangé, mais il faut écrire dans zone1 si elle existe)
+            try:
+                url2 = f"{API_URL}{identifiant}/conso?token={token}&types[]=CHF&types[]=SAN"
+                headers = {"User-Agent": "okhttp/4.12.0"}
 
-        # recopie dans data (ce qui est retourné au coordinator)
-        data.clear()
-        data.update(copy.deepcopy(self.data))
-        self.previousdata = copy.deepcopy(self.data)
+                async with aiohttp.ClientSession(headers=headers) as session2:
+                    async with session2.get(url2) as resp2:
+                        conso = await resp2.json()
 
-        return data
+                if "zone1" in self.data:
+                    self.data["zone1"].setdefault("energy", {})
+                    self.data["zone1"]["energy"]["CHF"] = sum(
+                        c["valeur"] for c in conso.get("CHF", []))
+                    if "SAN" in conso:
+                        self.data["zone1"]["energy"]["SAN"] = sum(
+                            c["valeur"] for c in conso.get("SAN", []))
+
+            except Exception:
+                _LOGGER.debug("Conso unavailable")
+
+            # recopie dans data (ce qui est retourné au coordinator)
+            data.clear()
+            data.update(copy.deepcopy(self.data))
+            self.previousdata = copy.deepcopy(self.data)
+
+            return data
+        else:
+            return self.previousdata
+
+    def generer_Appid_random(self, longueur=22):
+        caracteres = string.ascii_letters + string.digits
+        return ''.join(random.choice(caracteres) for _ in range(longueur))
