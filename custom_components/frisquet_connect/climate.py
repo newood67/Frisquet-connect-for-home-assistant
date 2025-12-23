@@ -298,15 +298,17 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
     def DefineavAilablePresetmodes(self, boost: bool):
         _LOGGER.debug("defineaavailPresetMode")
         if boost == True:
-            return [PRESET_COMFORT, PRESET_MODE.PRESET_REDUIT, PRESET_BOOST, PRESET_MODE.PRESET_HG, PRESET_MODE.PRESET_REDUITP, PRESET_MODE.PRESET_COMFORTP]
+            return [PRESET_COMFORT, PRESET_MODE.PRESET_REDUIT, PRESET_BOOST, PRESET_MODE.PRESET_HG, PRESET_MODE.PRESET_REDUITP, PRESET_MODE.PRESET_COMFORTP, PRESET_MODE.PRESET_VAC]
         else:
-            return [PRESET_COMFORT, PRESET_MODE.PRESET_REDUIT, PRESET_MODE.PRESET_HG, PRESET_MODE.PRESET_REDUITP, PRESET_MODE.PRESET_COMFORTP]
+            return [PRESET_COMFORT, PRESET_MODE.PRESET_REDUIT, PRESET_MODE.PRESET_HG, PRESET_MODE.PRESET_REDUITP, PRESET_MODE.PRESET_COMFORTP, PRESET_MODE.PRESET_VAC]
 
     def defPreset(self, selecteur, mode, BOOST, Dero):
         _LOGGER.debug("defPreset selecteur: %s mode: %s BOOST: %s Dero: %s",
                       selecteur, mode, BOOST, Dero)
         # if BOOST == True:
         #    return  PRESET_BOOST
+        if self.coordinator.data["vacances"]["MODE_VACANCES"] == True:
+            return "vacances"
         if Dero == True:
             if selecteur == 5 and mode == 7:
                 return "reduit"

@@ -38,6 +38,7 @@ class PRESET_MODE(StrEnum):
     PRESET_REDUITP = "reduit_permanent"
     PRESET_COMFORTP = "confort_permanent"
     PRESET_HG = "hors_gel"
+    PRESET_VAC = "vacances"
     # BOOST = "Boost"
     # CONFORT= "Confort"
 
@@ -50,4 +51,3 @@ class WaterHeaterModes(StrEnum):
     ECOPT = "Eco + Timer"
     ON = "On"
     OFF = "Stop"
-

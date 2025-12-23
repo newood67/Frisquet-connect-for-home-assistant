@@ -171,6 +171,7 @@ class FrisquetGetInfo:
 
             self.data["alarmes"] = response.get("alarmes", [])
             self.data["ecs"] = response.get("ecs", {})
+            self.data["vacances"] = response.get("vacances", {})
 
             # zones -> zone1/zone2/zone3
             zones = response.get("zones", [])

@@ -163,8 +163,8 @@ class ConsoCHF(SensorEntity, CoordinatorEntity):
     def icon(self) -> str | None:
         return "mdi:gas-burner"
 
-    #@property
-    #def should_poll(self) -> bool:
+    # @property
+    # def should_poll(self) -> bool:
     #    """Poll for those entities"""
     #    return True
 
@@ -252,8 +252,8 @@ class FrisquetAlert(SensorEntity, CoordinatorEntity):
     def icon(self) -> str | None:
         return "mdi:alert"
 
-    #@property
-    ##def should_poll(self) -> bool:
+    # @property
+    # def should_poll(self) -> bool:
     #    """Poll for those entities"""
     #    return True
 
@@ -317,8 +317,8 @@ class FrisquetThermometerExt(SensorEntity, CoordinatorEntity):
     def icon(self) -> str | None:
         return "mdi:thermometer"
 
-    #@property
-    #def should_poll(self) -> bool:
+    # @property
+    # def should_poll(self) -> bool:
     #   """Poll for those entities"""
     #    return True
 
@@ -387,8 +387,8 @@ class FrisquetThermometer(SensorEntity, CoordinatorEntity):
     def icon(self) -> str | None:
         return "mdi:thermometer"
 
-    #@property
-    #def should_poll(self) -> bool:
+    # @property
+    # def should_poll(self) -> bool:
     #    """Poll for those entities"""
     #    return True
 
