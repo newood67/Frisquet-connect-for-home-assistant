@@ -228,7 +228,7 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
             _LOGGER.debug("Key confort : %s", _key)
         elif self._attr_preset_mode == "reduit" or self._attr_preset_mode == "reduit_permanent":
             _key = "CONS_RED_Z"+str(self.coordinator.data[self.idx]["numero"])
-        elif self._attr_preset_mode == "hors_gel":
+        elif self._attr_preset_mode == "hors_gel" or self._attr_preset_mode == "vacances":
             _key = "CONS_HG_Z"+str(self.coordinator.data[self.idx]["numero"])
         else:
             pass
