@@ -339,7 +339,7 @@ class FrisquetConnectEntity(ClimateEntity, CoordinatorEntity):
             return CONS_CONF
         elif preset_mode == "reduit" or preset_mode == "reduit_permanent":
             return CONS_RED
-        elif preset_mode == "hors_gel":
+        elif preset_mode == "hors_gel" or preset_mode == "vacances":
             return CONS_HG
 
     def modeFrisquetToHVAC(self, mode: int, derog: bool, preset_mode, CAMB, TAMB):
